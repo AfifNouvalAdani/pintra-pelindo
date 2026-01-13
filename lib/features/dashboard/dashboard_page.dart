@@ -3,6 +3,40 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import '../vehicle/vehicle_booking_form_page.dart';
 
+class _ApprovalItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _ApprovalItem({
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.grey),
+          ),
+          child: Icon(icon, size: 32),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12),
+        ),
+      ],
+    );
+  }
+}
+
 class DashboardPage extends StatefulWidget {
   final String role;
   final String userName;
@@ -99,6 +133,42 @@ class _DashboardPageState extends State<DashboardPage> {
     return allMenus;
   }
 
+  void _showApprovalPopup() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black.withOpacity(0.4),
+      builder: (_) {
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.75,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: const [
+                  _ApprovalItem(
+                    icon: Icons.directions_car,
+                    label: 'Approval\nKendaraan',
+                  ),
+                  _ApprovalItem(
+                    icon: Icons.meeting_room,
+                    label: 'Approval\nRuang Meeting',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
@@ -112,7 +182,6 @@ class _DashboardPageState extends State<DashboardPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header
                     // Header
                     Padding(
                       padding: const EdgeInsets.symmetric(
@@ -155,7 +224,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             style: TextStyle(
                               fontSize: 18,
                               color: const Color.fromARGB(255, 0, 0, 0),
-                              fontWeight: FontWeight.w600, // SemiBold
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -180,8 +249,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(10),
                           image: const DecorationImage(
-                            image: AssetImage(
-                                'assets/images/banner-dashboard.png'),
+                            image: AssetImage('assets/images/banner-dashboard.png'),
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -274,7 +342,6 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                     ),
 
-
                     const SizedBox(height: 32),
 
                     // Menu Grid Header
@@ -311,8 +378,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       child: GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 3,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 16,
@@ -343,16 +409,19 @@ class _DashboardPageState extends State<DashboardPage> {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
+          // PERBAIKAN: Tambahkan kedua kondisi navigasi
           if (item.title == 'Peminjaman Mobil') {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => VehicleBookingFormPage(
-                    role: widget.role,
-                    userName: widget.userName,
-                  ),
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => VehicleBookingFormPage(
+                  role: widget.role,
+                  userName: widget.userName,
                 ),
-              );
+              ),
+            );
+          } else if (item.title == 'Approval Peminjaman') {
+            _showApprovalPopup();
           }
         },
         child: Container(
@@ -368,7 +437,6 @@ class _DashboardPageState extends State<DashboardPage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Icon Container dengan warna kustom
                 Container(
                   width: 56,
                   height: 56,
@@ -509,7 +577,7 @@ class _DashboardPageState extends State<DashboardPage> {
 class DashboardMenuItem {
   final String title;
   final String iconPath;
-  final double iconSize; // Anda bisa atur ukuran berbeda untuk setiap ikon
+  final double iconSize;
   final Color backgroundColor;
   final Color iconColor;
 
