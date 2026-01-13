@@ -313,7 +313,7 @@ class _VehicleBookingFormPageState extends State<VehicleBookingFormPage> {
       MaterialPageRoute(
         builder: (_) => DetailPeminjamanPage(
           data: data,
-          approvalStep: 0, // baru diajukan
+          approvalStep: 3, // baru diajukan
         ),
       ),
     );

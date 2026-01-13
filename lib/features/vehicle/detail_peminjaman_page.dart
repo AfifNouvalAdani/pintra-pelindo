@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../vehicle/form_kondisi_kendaraan_awal_page.dart';
 
 class DetailPeminjamanPage extends StatelessWidget {
   final Map<String, dynamic> data;
@@ -271,7 +272,12 @@ class DetailPeminjamanPage extends StatelessWidget {
                   height: 52,
                   child: ElevatedButton(
                     onPressed: () {
-                      // Navigasi ke form pengecekan kendaraan awal
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const FormKondisiKendaraanAwalPage(),
+                        ),
+                      );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue.shade700,
