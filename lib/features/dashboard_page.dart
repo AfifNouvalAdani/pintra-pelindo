@@ -16,6 +16,7 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
+
 class _DashboardPageState extends State<DashboardPage> {
   int _currentIndex = 0;
 
@@ -335,6 +336,43 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  void _showApprovalPopup() {
+  showDialog(
+    context: context,
+    barrierDismissible: true,
+    barrierColor: Colors.black.withOpacity(0.4),
+    builder: (_) {
+      return Center(
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.75,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: const [
+                _ApprovalItem(
+                  icon: Icons.directions_car,
+                  label: 'Approval\nKendaraan',
+                ),
+                _ApprovalItem(
+                  icon: Icons.meeting_room,
+                  label: 'Approval\nRuang Meeting',
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+
   Widget _buildMenuItem(DashboardMenuItem item) {
     return Material(
       color: Colors.transparent,
@@ -342,7 +380,9 @@ class _DashboardPageState extends State<DashboardPage> {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
-          // Aksi ketika menu di-tap
+          if (item.title == 'Approval Peminjaman') {
+            _showApprovalPopup();
+          }
         },
         child: Container(
           decoration: BoxDecoration(
@@ -509,4 +549,38 @@ class DashboardMenuItem {
     required this.backgroundColor,
     required this.iconColor,
   });
+}
+
+class _ApprovalItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _ApprovalItem({
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.grey),
+          ),
+          child: Icon(icon, size: 32),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12),
+        ),
+      ],
+    );
+  }
 }
