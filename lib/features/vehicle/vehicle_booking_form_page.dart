@@ -3,8 +3,179 @@ import 'package:intl/intl.dart';
 import '../dashboard/dashboard_page.dart';
 import '../vehicle/detail_peminjaman_page.dart';
 
+// Custom Time Picker 24 Jam
+class TimePicker24Hour extends StatefulWidget {
+  final TimeOfDay? initialTime;
+  final Function(TimeOfDay) onTimeSelected;
+
+  const TimePicker24Hour({
+    Key? key,
+    this.initialTime,
+    required this.onTimeSelected,
+  }) : super(key: key);
+
+  @override
+  _TimePicker24HourState createState() => _TimePicker24HourState();
+}
+
+class _TimePicker24HourState extends State<TimePicker24Hour> {
+  late FixedExtentScrollController _hourController;
+  late FixedExtentScrollController _minuteController;
+  
+  final List<int> _hours = List.generate(24, (index) => index);
+  final List<int> _minutes = List.generate(60, (index) => index);
+
+  @override
+  void initState() {
+    super.initState();
+    _hourController = FixedExtentScrollController(
+      initialItem: widget.initialTime?.hour ?? 8,
+    );
+    _minuteController = FixedExtentScrollController(
+      initialItem: widget.initialTime?.minute ?? 0,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Pilih Jam'),
+      content: Container(
+        height: 200,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Jam picker
+            Expanded(
+              child: Column(
+                children: [
+                  Text(
+                    'Jam',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: ListWheelScrollView(
+                      controller: _hourController,
+                      itemExtent: 50,
+                      diameterRatio: 1.5,
+                      physics: const FixedExtentScrollPhysics(),
+                      onSelectedItemChanged: (_) {},
+                      children: _hours.map((hour) {
+                        return Center(
+                          child: Text(
+                            hour.toString().padLeft(2, '0'),
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            Padding(
+              padding: const EdgeInsets.only(bottom: 40),
+              child: Text(
+                ':',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue.shade700,
+                ),
+              ),
+            ),
+            
+            // Menit picker
+            Expanded(
+              child: Column(
+                children: [
+                  Text(
+                    'Menit',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: ListWheelScrollView(
+                      controller: _minuteController,
+                      itemExtent: 50,
+                      diameterRatio: 1.5,
+                      physics: const FixedExtentScrollPhysics(),
+                      onSelectedItemChanged: (_) {},
+                      children: _minutes.map((minute) {
+                        return Center(
+                          child: Text(
+                            minute.toString().padLeft(2, '0'),
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            'Batal',
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            final selectedHour = _hours[_hourController.selectedItem];
+            final selectedMinute = _minutes[_minuteController.selectedItem];
+            widget.onTimeSelected(TimeOfDay(
+              hour: selectedHour,
+              minute: selectedMinute,
+            ));
+            Navigator.pop(context);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue.shade700,
+          ),
+          child: const Text('Pilih'),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    _hourController.dispose();
+    _minuteController.dispose();
+    super.dispose();
+  }
+}
+
+// Halaman Form Peminjaman
 class VehicleBookingFormPage extends StatefulWidget {
-  const VehicleBookingFormPage({super.key});
+  final String role;
+  final String userName;
+
+  const VehicleBookingFormPage({
+    super.key,
+    required this.role,
+    required this.userName,
+  });
 
   @override
   State<VehicleBookingFormPage> createState() =>
@@ -24,6 +195,7 @@ class _VehicleBookingFormPageState extends State<VehicleBookingFormPage> {
   DateTime? tglKembali;
   TimeOfDay? jamKembali;
 
+  // Fungsi untuk memilih tanggal
   Future<void> pickDate(bool isPinjam) async {
     final result = await showDatePicker(
       context: context,
@@ -57,111 +229,111 @@ class _VehicleBookingFormPageState extends State<VehicleBookingFormPage> {
     }
   }
 
+  // Fungsi untuk memilih waktu (menggunakan custom picker)
   Future<void> pickTime(bool isPinjam) async {
-    final result = await showTimePicker(
+    final currentTime = isPinjam ? jamPinjam : jamKembali;
+    
+    showDialog(
       context: context,
-      initialTime: TimeOfDay.now(),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            primaryColor: Colors.blue.shade700,
-            colorScheme: ColorScheme.light(
-              primary: Colors.blue.shade700,
-              onPrimary: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
+      builder: (context) => TimePicker24Hour(
+        initialTime: currentTime ?? TimeOfDay.now(),
+        onTimeSelected: (selectedTime) {
+          setState(() {
+            if (isPinjam) {
+              jamPinjam = selectedTime;
+            } else {
+              jamKembali = selectedTime;
+            }
+          });
+        },
+      ),
     );
-    if (result != null) {
-      setState(() {
-        if (isPinjam) {
-          jamPinjam = result;
-        } else {
-          jamKembali = result;
-        }
-      });
-    }
   }
 
+  // Fungsi format tanggal
+  String formatDate(DateTime? d) =>
+      d == null ? '-' : DateFormat('dd MMM yyyy').format(d);
+
+  // Fungsi format waktu 24 jam
+  String formatTime(TimeOfDay? t) {
+    if (t == null) return '-';
+    final hour = t.hour.toString().padLeft(2, '0');
+    final minute = t.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  // Fungsi submit form
   void _submitForm() {
-  // Validasi form
-  if (keperluan == null) {
-    _showSnackBar('Pilih keperluan peminjaman');
-    return;
-  }
+    // Validasi form
+    if (keperluan == null) {
+      _showSnackBar('Pilih keperluan peminjaman');
+      return;
+    }
+    
+    if (tglPinjam == null || jamPinjam == null) {
+      _showSnackBar('Pilih tanggal dan jam pinjam');
+      return;
+    }
+    
+    if (tglKembali == null || jamKembali == null) {
+      _showSnackBar('Pilih tanggal dan jam kembali');
+      return;
+    }
+    
+    if (tujuanController.text.isEmpty) {
+      _showSnackBar('Masukkan tujuan lokasi');
+      return;
+    }
+    
+    if (kendaraan == null) {
+      _showSnackBar('Pilih kendaraan');
+      return;
+    }
 
-  if (tglPinjam == null || jamPinjam == null) {
-    _showSnackBar('Pilih tanggal dan jam pinjam');
-    return;
-  }
+    // Siapkan data untuk halaman detail
+    final data = {
+      'nama': 'Tono', // nanti ambil dari user login
+      'nipp': '103884',
+      'divisi': 'Teknologi Informasi',
+      'keperluan': keperluan!,
+      'nomor': keperluan == 'Lainnya'
+          ? kegiatanController.text
+          : nomorController.text,
+      'tujuan': tujuanController.text,
+      'tglPinjam': DateFormat('dd MMMM yyyy').format(tglPinjam!),
+      'jamPinjam': formatTime(jamPinjam!),
+      'tglKembali': DateFormat('dd MMMM yyyy').format(tglKembali!),
+      'jamKembali': formatTime(jamKembali!),
+      'kendaraan': kendaraan!,
+    };
 
-  if (tglKembali == null || jamKembali == null) {
-    _showSnackBar('Pilih tanggal dan jam kembali');
-    return;
-  }
-
-  if (tujuanController.text.isEmpty) {
-    _showSnackBar('Masukkan tujuan lokasi');
-    return;
-  }
-
-  if (kendaraan == null) {
-    _showSnackBar('Pilih kendaraan');
-    return;
-  }
-
-  // Siapkan data untuk halaman detail
-  final data = {
-    'nama': 'Tono', // nanti ambil dari user login
-    'nipp': '103884',
-    'divisi': 'Teknologi Informasi',
-    'keperluan': keperluan!,
-    'nomor': keperluan == 'Lainnya'
-        ? kegiatanController.text
-        : nomorController.text,
-    'tujuan': tujuanController.text,
-    'tglPinjam': DateFormat('dd MMMM yyyy').format(tglPinjam!),
-    'jamPinjam': jamPinjam!.format(context),
-    'tglKembali': DateFormat('dd MMMM yyyy').format(tglKembali!),
-    'jamKembali': jamKembali!.format(context),
-    'kendaraan': kendaraan!,
-  };
-
-  // Pindah ke halaman Detail Peminjaman
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => DetailPeminjamanPage(
-        data: data,
-        approvalStep: 0, // baru diajukan
+    // Pindah ke halaman Detail Peminjaman
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DetailPeminjamanPage(
+          data: data,
+          approvalStep: 0, // baru diajukan
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
-void _showSnackBar(String message) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(message),
-      backgroundColor: Colors.red.shade600,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
       ),
-    ),
-  );
-}
-
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    String formatDate(DateTime? d) =>
-        d == null ? '-' : DateFormat('dd MMM yyyy').format(d);
-    String formatTime(TimeOfDay? t) =>
-        t == null ? '-' : t.format(context);
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -176,10 +348,12 @@ void _showSnackBar(String message) {
           onPressed: () {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => DashboardPage(
-                role: 'user', // Ganti dengan role yang sesuai
-                userName: 'User', // Ganti dengan nama user yang sesuai
-              )),
+              MaterialPageRoute(
+                builder: (context) => DashboardPage(
+                  role: widget.role,
+                  userName: widget.userName,
+                ),
+              ),
             );
           },
         ),
@@ -526,10 +700,12 @@ void _showSnackBar(String message) {
                   onPressed: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (context) => DashboardPage(
-                        role: 'user',
-                        userName: 'User',
-                      )),
+                      MaterialPageRoute(
+                        builder: (context) => DashboardPage(
+                          role: widget.role,
+                          userName: widget.userName,
+                        ),
+                      ),
                     );
                   },
                   style: TextButton.styleFrom(
@@ -565,17 +741,17 @@ void _showSnackBar(String message) {
     return Row(
       children: [
         Expanded(
-          child: _pickerBox(label1, value1, onTap1),
+          child: _pickerBox(label1, value1, onTap1, isTime: label1.contains('Jam')),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _pickerBox(label2, value2, onTap2),
+          child: _pickerBox(label2, value2, onTap2, isTime: label2.contains('Jam')),
         ),
       ],
     );
   }
 
-  Widget _pickerBox(String label, String value, VoidCallback onTap) {
+  Widget _pickerBox(String label, String value, VoidCallback onTap, {bool isTime = false}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -610,7 +786,7 @@ void _showSnackBar(String message) {
                   ),
                 ),
                 Icon(
-                  Icons.calendar_today_outlined,
+                  isTime ? Icons.access_time_rounded : Icons.calendar_today_outlined,
                   size: 18,
                   color: Colors.grey.shade500,
                 ),

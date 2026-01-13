@@ -344,12 +344,15 @@ class _DashboardPageState extends State<DashboardPage> {
         borderRadius: BorderRadius.circular(12),
         onTap: () {
           if (item.title == 'Peminjaman Mobil') {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const VehicleBookingFormPage(),
-              ),
-            );
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => VehicleBookingFormPage(
+                    role: widget.role,
+                    userName: widget.userName,
+                  ),
+                ),
+              );
           }
         },
         child: Container(
