@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import '../vehicle/vehicle_booking_form_page.dart';
+import '../aktivitas/aktivitas_page.dart';
+import '../admin/approval_kendaraan_page.dart';
+
 class _ApprovalItem extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -133,40 +136,52 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _showApprovalPopup() {
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.4),
-      builder: (_) {
-        return Center(
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              width: MediaQuery.of(context).size.width * 0.75,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: const [
-                  _ApprovalItem(
+  showDialog(
+    context: context,
+    barrierDismissible: true,
+    barrierColor: Colors.black.withOpacity(0.4),
+    builder: (_) {
+      return Center(
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.75,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                InkWell(
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ApprovalKendaraanPage(),
+                      ),
+                    );
+                  },
+                  child: const _ApprovalItem(
                     icon: Icons.directions_car,
                     label: 'Approval\nKendaraan',
                   ),
-                  _ApprovalItem(
-                    icon: Icons.meeting_room,
-                    label: 'Approval\nRuang Meeting',
-                  ),
-                ],
-              ),
+                ),
+                const _ApprovalItem(
+                  icon: Icons.meeting_room,
+                  label: 'Approval\nRuang Meeting',
+                ),
+              ],
             ),
           ),
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -396,6 +411,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               )
             : _currentIndex == 1
+                ? const AktivitasPage()
                 : _buildProfileTab(),
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
