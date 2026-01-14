@@ -291,21 +291,23 @@ class _VehicleBookingFormPageState extends State<VehicleBookingFormPage> {
     }
 
     // Siapkan data untuk halaman detail
-    final data = {
-      'nama': 'Tono', // nanti ambil dari user login
-      'nipp': '103884',
-      'divisi': 'Teknologi Informasi',
-      'keperluan': keperluan!,
-      'nomor': keperluan == 'Lainnya'
-          ? kegiatanController.text
-          : nomorController.text,
-      'tujuan': tujuanController.text,
-      'tglPinjam': DateFormat('dd MMMM yyyy').format(tglPinjam!),
-      'jamPinjam': formatTime(jamPinjam!),
-      'tglKembali': DateFormat('dd MMMM yyyy').format(tglKembali!),
-      'jamKembali': formatTime(jamKembali!),
-      'kendaraan': kendaraan!,
-    };
+      final data = {
+        'id': 'PMJ-${DateTime.now().millisecondsSinceEpoch}',
+        'nama': 'Tono',
+        'nipp': '103884',
+        'divisi': 'Teknologi Informasi',
+        'keperluan': keperluan!,
+        'nomor': keperluan == 'Lainnya'
+            ? kegiatanController.text
+            : nomorController.text,
+        'tujuan': tujuanController.text,
+        'tglPinjam': DateFormat('dd MMMM yyyy').format(tglPinjam!),
+        'jamPinjam': formatTime(jamPinjam!),
+        'tglKembali': DateFormat('dd MMMM yyyy').format(tglKembali!),
+        'jamKembali': formatTime(jamKembali!),
+        'kendaraan': kendaraan!,
+      };
+
 
     // Pindah ke halaman Detail Peminjaman
     Navigator.push(
