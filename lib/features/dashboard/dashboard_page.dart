@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import '../vehicle/vehicle_booking_form_page.dart';
-import '../aktivitas/aktivitas_page.dart';
 class _ApprovalItem extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -397,7 +396,6 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               )
             : _currentIndex == 1
-                ? AktivitasPage()
                 : _buildProfileTab(),
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
