@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import '../vehicle/vehicle_booking_form_page.dart';
-
 class _ApprovalItem extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -396,7 +395,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   ],
                 ),
               )
-            : _buildOtherTab(),
+            : _currentIndex == 1
+                : _buildProfileTab(),
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
     );
@@ -475,66 +475,51 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildOtherTab() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(24),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                _currentIndex == 1 ? 'Aktivitas' : 'Profil',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade900,
-                ),
+  Widget _buildProfileTab() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.all(24),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Profil',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade900,
               ),
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.blue.shade100,
-                ),
-                child: Icon(
-                  Icons.person_outline,
-                  size: 24,
-                  color: Colors.blue.shade800,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  _currentIndex == 1 ? Icons.history : Icons.person,
-                  size: 64,
-                  color: Colors.grey.shade300,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  _currentIndex == 1
-                      ? 'Tidak ada aktivitas'
-                      : 'Fitur profil dalam pengembangan',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey.shade500,
-                  ),
-                ),
-              ],
             ),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.blue.shade100,
+              ),
+              child: Icon(
+                Icons.person_outline,
+                size: 24,
+                color: Colors.blue.shade800,
+              ),
+            ),
+          ],
+        ),
+      ),
+      const Expanded(
+        child: Center(
+          child: Text(
+            'Fitur profil dalam pengembangan',
+            style: TextStyle(color: Colors.grey),
           ),
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
+
 
   Widget _buildBottomNavigationBar() {
     return Container(
