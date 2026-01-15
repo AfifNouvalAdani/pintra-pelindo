@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../aktivitas/aktivitas_page.dart';
+import '../dashboard/dashboard_page.dart';
 
 class FormKondisiKendaraanAwalPage extends StatefulWidget {
   const FormKondisiKendaraanAwalPage({super.key});
@@ -105,17 +107,17 @@ class _FormKondisiKendaraanAwalPageState
     );
   }
 
-  void _simpanForm() {
+    void _simpanForm() {
     if (kondisi == null) {
       _showSnackBar('Pilih kondisi kendaraan');
       return;
     }
-    
+
     if (kondisi == 'Tidak Baik' && uraianKondisiController.text.isEmpty) {
       _showSnackBar('Uraikan kondisi tidak baik');
       return;
     }
-    
+
     if (kelengkapan == null) {
       _showSnackBar('Pilih kelengkapan kendaraan');
       return;
@@ -132,15 +134,26 @@ class _FormKondisiKendaraanAwalPageState
         return;
       }
     }
-    
+
     if (odoController.text.isEmpty) {
       _showSnackBar('Masukkan odometer awal');
       return;
     }
 
-    // Simpan data ke firestore
-    _showSuccessDialog();
+    // LANGSUNG KE DASHBOARD → TAB AKTIVITAS
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DashboardPage(
+          role: 'admin',
+          userName: 'Budi',
+          initialIndex: 1,
+        ),
+      ),
+      (route) => false,
+    );
   }
+
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -151,37 +164,6 @@ class _FormKondisiKendaraanAwalPageState
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
-      ),
-    );
-  }
-
-  void _showSuccessDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Data Tersimpan'),
-        content: const Text(
-          'Form kondisi kendaraan awal telah berhasil disimpan.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Kembali',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context); // Tutup dialog
-              Navigator.pop(context); // Kembali ke halaman sebelumnya
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue.shade700,
-            ),
-            child: const Text('OK'),
-          ),
-        ],
       ),
     );
   }

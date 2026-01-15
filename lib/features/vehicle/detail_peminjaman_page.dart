@@ -5,13 +5,15 @@ import '../vehicle/form_pengembalian_kendaraan_page.dart';
 class DetailPeminjamanPage extends StatelessWidget {
   final Map<String, dynamic> data;
   final int approvalStep;
-  final bool isReturn; // <- tambah ini
+  final bool isReturn;
+  final bool isApprovalMode;
 
   const DetailPeminjamanPage({
     super.key,
     required this.data,
     required this.approvalStep,
-    this.isReturn = false, // default: false (mode awal)
+    this.isReturn = false,
+    this.isApprovalMode = false,
   });
 
   @override
@@ -266,70 +268,111 @@ class DetailPeminjamanPage extends StatelessWidget {
               const SizedBox(height: 40),
 
                 // Tombol Aksi
-                if (approvalStep == 3)
+                if (isApprovalMode) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            // TODO: update status menjadi "Ditolak"
+                            Navigator.pop(context);
+                          },
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.red),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Tolak',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            // TODO: update status menjadi "Disetujui"
+                            Navigator.pop(context);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue.shade700,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('Setujui'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  if (approvalStep == 3)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (isReturn) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const FormPengembalianKendaraanPage(),
+                              ),
+                            );
+                          } else {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const FormKondisiKendaraanAwalPage(),
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.shade700,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Selanjutnya',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 12),
+
                   SizedBox(
                     width: double.infinity,
                     height: 52,
-                    child: ElevatedButton(
+                    child: OutlinedButton(
                       onPressed: () {
-                        if (isReturn) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const FormPengembalianKendaraanPage(),
-                            ),
-                          );
-                        } else {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const FormKondisiKendaraanAwalPage(),
-                            ),
-                          );
-                        }
+                        Navigator.pop(context);
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.shade700,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
+                      style: OutlinedButton.styleFrom(
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        side: BorderSide(color: Colors.grey.shade300),
                       ),
-                      child: const Text(
-                        'Selanjutnya',
+                      child: Text(
+                        'Kembali ke Dashboard',
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700,
                         ),
                       ),
                     ),
                   ),
-
-                const SizedBox(height: 12),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      side: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    child: Text(
-                      'Kembali ke Dashboard',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                  ),
-                ),
+                ],
 
               const SizedBox(height: 20),
             ],

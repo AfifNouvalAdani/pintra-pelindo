@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../vehicle/detail_peminjaman_page.dart';
 
 class ApprovalKendaraanPage extends StatefulWidget {
   const ApprovalKendaraanPage({super.key});
@@ -21,6 +22,8 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
     'Disetujui',
     'Dibatalkan',
   ];
+
+  
 
   final List<Map<String, dynamic>> allData = [
     {
@@ -715,173 +718,428 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
   }
 
   Widget _buildApprovalCard(Map<String, dynamic> item) {
-    final statusColor = _getStatusColor(item['status']);
-    final statusIcon = _getStatusIcon(item['status']);
+  final statusColor = _getStatusColor(item['status']);
+  final statusIcon = _getStatusIcon(item['status']);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade100,
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header dengan status
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  statusIcon,
+  return Container(
+    margin: const EdgeInsets.only(bottom: 16),
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: Colors.grey.shade200),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.grey.shade100,
+          blurRadius: 20,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header dengan status
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                statusIcon,
+                color: statusColor,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item['id'],
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item['title'],
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${item['tanggal'].day}/${item['tanggal'].month}/${item['tanggal'].year} • ${item['jam']}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: statusColor.withOpacity(0.2)),
+              ),
+              child: Text(
+                item['status'],
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                   color: statusColor,
-                  size: 20,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+        Divider(color: Colors.grey.shade200),
+        const SizedBox(height: 16),
+
+        // Detail Peminjaman
+        _buildDetailRow(
+          icon: Icons.person_outline_rounded,
+          label: 'Peminjam',
+          value: '${item['peminjam']} (${item['nipp']})',
+        ),
+        const SizedBox(height: 12),
+        _buildDetailRow(
+          icon: Icons.business_rounded,
+          label: 'Divisi',
+          value: item['divisi'],
+        ),
+        const SizedBox(height: 12),
+        _buildDetailRow(
+          icon: Icons.directions_car_rounded,
+          label: 'Kendaraan',
+          value: item['kendaraan'],
+        ),
+        const SizedBox(height: 12),
+        _buildDetailRow(
+          icon: Icons.location_on_rounded,
+          label: 'Tujuan',
+          value: item['tujuan'],
+        ),
+
+        const SizedBox(height: 20),
+
+        // Tombol Aksi
+        Row(
+          children: [
+            // Tombol Lihat Detail
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => DetailPeminjamanPage(
+                        data: {
+                          'id': item['id'],
+                          'nama': item['peminjam'],
+                          'nipp': item['nipp'],
+                          'divisi': item['divisi'],
+                          'keperluan': item['keperluan'],
+                          'nomor': item['nomor'],
+                          'tujuan': item['tujuan'],
+                          'kendaraan': item['kendaraan'],
+                          'tglPinjam': item['tglPinjam'],
+                          'jamPinjam': item['jamPinjam'],
+                          'tglKembali': item['tglKembali'],
+                          'jamKembali': item['jamKembali'],
+                        },
+                        approvalStep: 0,
+                        isApprovalMode: true, // <- mode admin
+                      ),
+                    ),
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.blue.shade700,
+                  side: BorderSide(color: Colors.blue.shade700, width: 1.5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  textStyle: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      item['id'],
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
-                      ),
+                    Icon(
+                      Icons.visibility_outlined,
+                      size: 18,
+                      color: Colors.blue.shade700,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      item['title'],
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade900,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${item['tanggal'].day}/${item['tanggal'].month}/${item['tanggal'].year} • ${item['jam']}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
+                    const SizedBox(width: 8),
+                    const Text('Lihat Detail'),
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: statusColor.withOpacity(0.2)),
-                ),
-                child: Text(
-                  item['status'],
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: statusColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-          Divider(color: Colors.grey.shade200),
-          const SizedBox(height: 16),
-
-          // Detail Peminjaman
-          _buildDetailRow(
-            icon: Icons.person_outline_rounded,
-            label: 'Peminjam',
-            value: '${item['peminjam']} (${item['nipp']})',
-          ),
-          const SizedBox(height: 12),
-          _buildDetailRow(
-            icon: Icons.business_rounded,
-            label: 'Divisi',
-            value: item['divisi'],
-          ),
-          const SizedBox(height: 12),
-          _buildDetailRow(
-            icon: Icons.directions_car_rounded,
-            label: 'Kendaraan',
-            value: item['kendaraan'],
-          ),
-          const SizedBox(height: 12),
-          _buildDetailRow(
-            icon: Icons.location_on_rounded,
-            label: 'Tujuan',
-            value: item['tujuan'],
-          ),
-
-          const SizedBox(height: 20),
-
-          // Tombol Aksi
-          Row(
-            children: [
+            ),
+            
+            const SizedBox(width: 12),
+            
+            // Tombol Setujui (hanya untuk Permohonan Approval)
+            if (item['status'] == 'Permohonan Approval')
               Expanded(
-                child: OutlinedButton(
+                child: ElevatedButton(
                   onPressed: () {
-                    // Detail peminjaman
+                    // Tampilkan dialog konfirmasi
+                    _showApprovalConfirmationDialog(context, item);
                   },
-                  style: OutlinedButton.styleFrom(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade600,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    side: BorderSide(color: Colors.grey.shade300),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    textStyle: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  child: Text(
-                    'Lihat Detail',
-                    style: TextStyle(
-                      color: Colors.grey.shade700,
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline_rounded,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('Setujui'),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              if (item['status'] == 'Permohonan Approval')
+            
+            // Tombol Aksi lain untuk status yang berbeda
+            if (item['status'] == 'Permohonan Pembatalan')
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    // Proses pembatalan
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange.shade600,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    textStyle: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.history_toggle_off_rounded,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('Proses'),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+// Tambahkan fungsi untuk dialog konfirmasi approval
+void _showApprovalConfirmationDialog(BuildContext context, Map<String, dynamic> item) {
+  showDialog(
+    context: context,
+    builder: (context) => Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      elevation: 0,
+      backgroundColor: Colors.white,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon Konfirmasi
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.question_mark_rounded,
+                size: 32,
+                color: Colors.blue.shade700,
+              ),
+            ),
+            
+            const SizedBox(height: 20),
+            
+            // Judul Dialog
+            Text(
+              'Konfirmasi Approval',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade900,
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Pesan Konfirmasi
+            Text(
+              'Apakah Anda yakin ingin menyetujui peminjaman ini?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                color: Colors.grey.shade700,
+                height: 1.4,
+              ),
+            ),
+            
+            const SizedBox(height: 32),
+            
+            // Tombol Aksi
+            Row(
+              children: [
+                // Tombol Batal (Merah)
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade50,
+                      foregroundColor: Colors.red.shade700,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: Colors.red.shade200,
+                          width: 1.5,
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      textStyle: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: Colors.red.shade700,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text('Batal'),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(width: 12),
+                
+                // Tombol Ya, Setujui (Hijau)
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () {
-                      // Proses approval
+                      // Update status menjadi Disetujui
+                      setState(() {
+                        item['status'] = 'Disetujui';
+                      });
+                      Navigator.pop(context);
+                      
+                      // Tampilkan snackbar konfirmasi
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Peminjaman ${item['id']} telah disetujui',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                          ),
+                          backgroundColor: Colors.green.shade600,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          duration: const Duration(seconds: 3),
+                        ),
+                      );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade700,
+                      backgroundColor: Colors.green.shade600,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      textStyle: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    child: const Text('Proses'),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.check_circle_outline_rounded,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text('Ya, Setujui'),
+                      ],
+                    ),
                   ),
                 ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildDetailRow({
     required IconData icon,

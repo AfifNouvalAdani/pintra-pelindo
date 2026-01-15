@@ -42,11 +42,13 @@ class _ApprovalItem extends StatelessWidget {
 class DashboardPage extends StatefulWidget {
   final String role;
   final String userName;
+  final int initialIndex; // <-- tambah
 
   const DashboardPage({
     super.key,
     required this.role,
     required this.userName,
+    this.initialIndex = 0, // default tetap dashboard
   });
 
   @override
@@ -54,11 +56,12 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  int _currentIndex = 0;
+  late int _currentIndex;
 
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialIndex; // <-- pakai index dari luar
     initializeDateFormatting('id_ID', null);
   }
 
