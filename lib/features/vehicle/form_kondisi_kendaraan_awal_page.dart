@@ -1,9 +1,30 @@
 import 'package:flutter/material.dart';
-import '../aktivitas/aktivitas_page.dart';
 import '../dashboard/dashboard_page.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:io';
+import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 class FormKondisiKendaraanAwalPage extends StatefulWidget {
-  const FormKondisiKendaraanAwalPage({super.key});
+  final String role;
+  final String userName;
+  final String userId;
+  final String bookingId;           
+  final String vehicleId;           
+  final Map<String, dynamic>? vehicleData;
+  final String userDivision;
+
+  const FormKondisiKendaraanAwalPage({
+    super.key,
+    required this.role,
+    required this.userName,
+    required this.userId,
+    required this.bookingId,        
+    required this.vehicleId,        
+    this.vehicleData,
+    required this.userDivision,               
+  });
 
   @override
   State<FormKondisiKendaraanAwalPage> createState() =>
@@ -26,6 +47,9 @@ class _FormKondisiKendaraanAwalPageState
 
   bool _isUploading = false;
   bool _hasPhoto = false;
+  File? _photoFile;
+  String? _photoBase64; // ✅ Ganti dari _photoUrl ke _photoBase64
+  bool _isSaving = false;
 
   // Fungsi untuk menghitung persentase kelengkapan
   double _calculateCompleteness() {
@@ -107,7 +131,8 @@ class _FormKondisiKendaraanAwalPageState
     );
   }
 
-    void _simpanForm() {
+  Future<void> _simpanForm() async {
+    // ========== VALIDASI FORM ==========
     if (kondisi == null) {
       _showSnackBar('Pilih kondisi kendaraan');
       return;
@@ -125,7 +150,7 @@ class _FormKondisiKendaraanAwalPageState
 
     if (kelengkapan == 'Tidak Lengkap') {
       if (p3k && dongkrak && segitiga) {
-        _showSnackBar('Pilih kelengkapan yang masih ada');
+        _showSnackBar('Pilih kelengkapan yang tidak tersedia');
         return;
       }
 
@@ -140,18 +165,142 @@ class _FormKondisiKendaraanAwalPageState
       return;
     }
 
-    // LANGSUNG KE DASHBOARD → TAB AKTIVITAS
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DashboardPage(
-          role: 'admin',
-          userName: 'Budi',
-          initialIndex: 1,
-        ),
-      ),
-      (route) => false,
-    );
+    final int? odometerValue = int.tryParse(odoController.text);
+    if (odometerValue == null) {
+      _showSnackBar('Odometer harus berupa angka');
+      return;
+    }
+
+    // ========== MULAI PROSES SIMPAN ==========
+    setState(() => _isSaving = true);
+
+    try {
+      // 1️⃣ CEK STATUS BOOKING
+      final bookingDoc = await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .doc(widget.bookingId)
+          .get();
+
+      if (!bookingDoc.exists) {
+        throw Exception('Data peminjaman tidak ditemukan');
+      }
+
+      final currentStatus = bookingDoc.data()?['status'];
+      if (currentStatus != 'APPROVAL_3') {
+        throw Exception('Peminjaman tidak dalam status yang tepat untuk pengambilan kendaraan. Status saat ini: $currentStatus');
+      }
+
+      // 2️⃣ SIAPKAN DATA KONDISI AWAL
+      Map<String, dynamic> kondisiAwalData = {
+        'kondisi': kondisi,
+        'kelengkapan': kelengkapan,
+        'kelengkapanItems': {
+          'p3k': p3k,
+          'dongkrak': dongkrak,
+          'segitiga': segitiga,
+        },
+        'odometerAwal': odometerValue,
+        'timestamp': Timestamp.now(),
+        'filledBy': widget.userId,
+        'filledByName': widget.userName,
+      };
+
+      // Tambahkan uraian jika kondisi tidak baik
+      if (kondisi == 'Tidak Baik' && uraianKondisiController.text.isNotEmpty) {
+        kondisiAwalData['uraianKondisi'] = uraianKondisiController.text;
+      }
+
+      // Tambahkan uraian jika kelengkapan tidak lengkap
+      if (kelengkapan == 'Tidak Lengkap' && uraianKelengkapanController.text.isNotEmpty) {
+        kondisiAwalData['uraianKelengkapan'] = uraianKelengkapanController.text;
+      }
+
+      // Tambahkan foto sebagai base64 jika ada
+      if (_photoBase64 != null && _photoBase64!.isNotEmpty) {
+        kondisiAwalData['fotoBase64'] = _photoBase64;
+        kondisiAwalData['fotoTimestamp'] = Timestamp.now();
+      }
+
+      // 3️⃣ UPDATE DOCUMENT VEHICLE_BOOKINGS
+      await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .doc(widget.bookingId)
+          .update({
+        'kondisiAwal': kondisiAwalData,
+        'status': 'ON_GOING',
+        'actualPickupTime': Timestamp.now(),
+        'updatedAt': Timestamp.now(),
+      });
+
+      print('✅ Booking updated to ON_GOING');
+
+      // 4️⃣ UPDATE ODOMETER DI COLLECTION VEHICLES
+      await FirebaseFirestore.instance
+          .collection('vehicles')
+          .doc(widget.vehicleId)
+          .update({
+        'odometerTerakhir': odometerValue,
+        'updatedAt': Timestamp.now(),
+      });
+
+      print('✅ Vehicle odometer updated');
+
+      await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .doc(widget.bookingId)
+          .collection('approval_history')
+          .add({
+        'action': 'VEHICLE_PICKED_UP',
+        'oldStatus': 'APPROVAL_3',
+        'newStatus': 'ON_GOING',
+        'status': 'ON_GOING', // ✅ TAMBAHKAN INI - Penting untuk timeline
+        'actionBy': widget.userName,
+        'actionRole': widget.role, // ✅ Tambahkan role
+        'userId': widget.userId,
+        'timestamp': Timestamp.now(),
+        'note': 'Kendaraan telah diambil dan kondisi awal telah dicatat oleh ${widget.userName}',
+        'odometerAwal': odometerValue,
+      });
+
+      print('✅ Approval history added');
+
+      setState(() => _isSaving = false);
+
+      if (mounted) {
+        // 6️⃣ TAMPILKAN PESAN SUKSES
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Kondisi kendaraan berhasil dicatat'),
+            backgroundColor: Colors.green.shade600,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // 7️⃣ NAVIGATE KE DASHBOARD TAB AKTIVITAS
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DashboardPage(
+              role: widget.role,
+              userName: widget.userName,
+              userId: widget.userId,
+              userDivision: widget.userDivision,
+            ),
+          ),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      setState(() => _isSaving = false);
+      print('❌ Error saving form: $e');
+      
+      if (mounted) {
+        _showSnackBar('Gagal menyimpan: ${e.toString()}');
+      }
+    }
   }
 
 
@@ -168,23 +317,85 @@ class _FormKondisiKendaraanAwalPageState
     );
   }
 
-  void _uploadFoto() {
-    // Simulasi upload foto
-    setState(() {
-      _isUploading = true;
-    });
+  Future<void> _uploadFoto() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      
+      // Tampilkan pilihan: Kamera atau Galeri
+      final ImageSource? source = await showDialog<ImageSource>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Pilih Sumber Foto'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Kamera'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Galeri'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      );
 
-    Future.delayed(const Duration(seconds: 2), () {
-      setState(() {
-        _isUploading = false;
-        _hasPhoto = true;
-      });
-    });
+      if (source == null) return;
+
+      final XFile? image = await picker.pickImage(
+        source: source,
+        maxWidth: 1024, // Resize otomatis
+        maxHeight: 1024,
+        imageQuality: 70, // Kompresi 70%
+      );
+
+      if (image != null) {
+        setState(() => _isUploading = true);
+
+        // Baca file sebagai bytes
+        final bytes = await File(image.path).readAsBytes();
+        
+        // Convert ke base64
+        final base64String = base64Encode(bytes);
+        
+        // Cek ukuran (jangan lebih dari 800KB untuk safety)
+        final sizeInKB = base64String.length * 0.75 / 1024;
+        
+        if (sizeInKB > 800) {
+          if (mounted) {
+            _showSnackBar('Foto terlalu besar (${sizeInKB.toStringAsFixed(0)}KB). Maksimal 800KB');
+          }
+          setState(() => _isUploading = false);
+          return;
+        }
+
+        setState(() {
+          _photoFile = File(image.path);
+          _photoBase64 = base64String;
+          _hasPhoto = true;
+          _isUploading = false;
+        });
+        
+        print('Foto berhasil dipilih. Size: ${sizeInKB.toStringAsFixed(2)} KB');
+      }
+    } catch (e) {
+      print('Error picking image: $e');
+      setState(() => _isUploading = false);
+      if (mounted) {
+        _showSnackBar('Gagal mengambil foto');
+      }
+    }
   }
 
   void _hapusFoto() {
     setState(() {
       _hasPhoto = false;
+      _photoFile = null;
+      _photoBase64 = null;
     });
   }
 
@@ -868,29 +1079,51 @@ class _FormKondisiKendaraanAwalPageState
               const SizedBox(height: 40),
 
               // Tombol Simpan
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _simpanForm,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade700,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: _isSaving ? null : _simpanForm, // ✅ Disable saat saving
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _isSaving ? Colors.grey.shade400 : Colors.blue.shade700, // ✅ Ubah warna
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: _isSaving
+                          ? Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Menyimpan...',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : const Text(
+                              'Selesai',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  child: const Text(
-                    'Selesai',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
 
               const SizedBox(height: 12),
 

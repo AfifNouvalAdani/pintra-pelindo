@@ -1,16 +1,175 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // ✅ Tambahkan import ini
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-class BerhasilPengembalianPage extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final int approvalStep = 3; // Karena sudah selesai
+
+class BerhasilPengembalianPage extends StatefulWidget {
+  final String bookingId; // ✅ Cukup kirim ID saja
 
   const BerhasilPengembalianPage({
     super.key,
-    required this.data,
+    required this.bookingId,
   });
 
   @override
+  State<BerhasilPengembalianPage> createState() => _BerhasilPengembalianPageState();
+}
+
+class _BerhasilPengembalianPageState extends State<BerhasilPengembalianPage> {
+  bool _isLoading = true;
+  Map<String, dynamic>? _bookingData;
+  Map<String, dynamic>? _vehicleData;
+  List<Map<String, dynamic>> _approvalHistory = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      setState(() => _isLoading = true);
+
+      // 1. Ambil data booking
+      final bookingDoc = await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .doc(widget.bookingId)
+          .get();
+
+      if (!bookingDoc.exists) {
+        throw Exception('Data booking tidak ditemukan');
+      }
+
+      _bookingData = {
+        'id': bookingDoc.id,
+        ...bookingDoc.data() as Map<String, dynamic>,
+      };
+
+      // 2. Ambil data kendaraan
+      if (_bookingData!['vehicleId'] != null) {
+        final vehicleDoc = await FirebaseFirestore.instance
+            .collection('vehicles')
+            .doc(_bookingData!['vehicleId'])
+            .get();
+
+        if (vehicleDoc.exists) {
+          _vehicleData = {
+            'id': vehicleDoc.id,
+            ...vehicleDoc.data() as Map<String, dynamic>,
+          };
+        }
+      }
+
+      // 3. Ambil riwayat approval
+      final historySnapshot = await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .doc(widget.bookingId)
+          .collection('approval_history')
+          .orderBy('timestamp', descending: false)
+          .get();
+
+      _approvalHistory = historySnapshot.docs.map((doc) {
+        return {
+          'id': doc.id,
+          ...doc.data(),
+        };
+      }).toList();
+
+    } catch (e) {
+      print('Error loading data: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // Format helpers
+  String _formatTimestamp(Timestamp? timestamp) {
+    if (timestamp == null) return '-';
+    final date = timestamp.toDate();
+    return DateFormat('dd MMMM yyyy, HH:mm', 'id_ID').format(date);
+  }
+
+  String _formatDate(Timestamp? timestamp) {
+    if (timestamp == null) return '-';
+    final date = timestamp.toDate();
+    return DateFormat('dd MMMM yyyy', 'id_ID').format(date);
+  }
+
+  String _formatTime(Timestamp? timestamp) {
+    if (timestamp == null) return '-';
+    final date = timestamp.toDate();
+    return DateFormat('HH:mm', 'id_ID').format(date);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          title: Text(
+            'Pengembalian Selesai',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade900,
+            ),
+          ),
+          centerTitle: true,
+        ),
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Colors.blue.shade700,
+          ),
+        ),
+      );
+    }
+
+    if (_bookingData == null) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          title: Text('Pengembalian Selesai'),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Colors.red.shade300,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Data tidak ditemukan',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Ambil data dari Firestore
+    final booking = _bookingData!;
+    final vehicle = _vehicleData;
+    final kondisiAkhir = booking['kondisiAkhir'] as Map<String, dynamic>?;
+    
+    final waktuPinjam = booking['waktuPinjam'] as Timestamp?;
+    final waktuKembali = booking['waktuKembali'] as Timestamp?;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -96,7 +255,7 @@ class BerhasilPengembalianPage extends StatelessWidget {
 
               const SizedBox(height: 32),
 
-              // Timeline dengan step tambahan pengembalian
+              // Timeline
               Text(
                 'Proses Peminjaman',
                 style: TextStyle(
@@ -160,19 +319,26 @@ class BerhasilPengembalianPage extends StatelessWidget {
                     const SizedBox(height: 20),
 
                     // Data Peminjaman
-                    _buildDetailItem('Nama Peminjam', data['nama']),
-                    _buildDetailItem('NIPP', data['nipp']),
-                    _buildDetailItem('Divisi', data['divisi']),
-                    _buildDetailItem('Keperluan', data['keperluan']),
-                    if (data['nomor'] != null && data['nomor'].isNotEmpty)
-                      _buildDetailItem('Nomor SPPD/Undangan', data['nomor']),
-                    _buildDetailItem('Tujuan', data['tujuan']),
-                    _buildDetailItem('Kendaraan', data['kendaraan']),
+                    _buildDetailItem('Nama Peminjam', booking['namaPeminjam'] ?? '-'),
+                    _buildDetailItem('Divisi', booking['divisi'] ?? '-'),
+                    _buildDetailItem('Keperluan', booking['keperluan'] ?? '-'),
+                    
+                    if (booking['nomorSurat'] != null && 
+                        booking['nomorSurat'].toString().isNotEmpty && 
+                        booking['nomorSurat'] != '-')
+                      _buildDetailItem('Nomor SPPD/Undangan', booking['nomorSurat'].toString()),
+                    
+                    _buildDetailItem('Tujuan', booking['tujuan'] ?? '-'),
+                    
+                    // Data Kendaraan
+                    if (vehicle != null)
+                      _buildDetailItem('Kendaraan', '${vehicle['nama']} (${vehicle['platNomor']})'),
 
                     const SizedBox(height: 16),
                     Divider(color: Colors.grey.shade200),
                     const SizedBox(height: 16),
 
+                    // Waktu Peminjaman
                     Row(
                       children: [
                         Expanded(
@@ -188,7 +354,7 @@ class BerhasilPengembalianPage extends StatelessWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                data['tglPinjam'],
+                                _formatDate(waktuPinjam),
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
@@ -196,7 +362,7 @@ class BerhasilPengembalianPage extends StatelessWidget {
                                 ),
                               ),
                               Text(
-                                data['jamPinjam'],
+                                _formatTime(waktuPinjam),
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: Colors.grey.shade700,
@@ -231,7 +397,7 @@ class BerhasilPengembalianPage extends StatelessWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                data['tglKembali'],
+                                _formatDate(waktuKembali),
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
@@ -239,7 +405,7 @@ class BerhasilPengembalianPage extends StatelessWidget {
                                 ),
                               ),
                               Text(
-                                data['jamKembali'],
+                                _formatTime(waktuKembali),
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: Colors.grey.shade700,
@@ -251,10 +417,8 @@ class BerhasilPengembalianPage extends StatelessWidget {
                       ],
                     ),
 
-                    // Data Pengembalian (jika ada)
-                    if (data['kondisiPengembalian'] != null ||
-                        data['sisaBBM'] != null ||
-                        data['odometerAkhir'] != null) ...[
+                    // Data Pengembalian
+                    if (kondisiAkhir != null) ...[
                       const SizedBox(height: 16),
                       Divider(color: Colors.grey.shade200),
                       const SizedBox(height: 16),
@@ -285,14 +449,10 @@ class BerhasilPengembalianPage extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      if (data['kondisiPengembalian'] != null)
-                        _buildDetailItem(
-                            'Kondisi Saat Kembali', data['kondisiPengembalian']),
-                      if (data['sisaBBM'] != null)
-                        _buildDetailItem('Sisa BBM', data['sisaBBM']),
-                      if (data['odometerAkhir'] != null)
-                        _buildDetailItem(
-                            'Odometer Akhir', data['odometerAkhir']),
+                      _buildDetailItem('Kondisi Saat Kembali', kondisiAkhir['kondisi'] ?? '-'),
+                      _buildDetailItem('Sisa BBM', kondisiAkhir['sisaBBM'] ?? '-'),
+                      _buildDetailItem('Odometer Akhir', kondisiAkhir['odometerAkhir']?.toString() ?? '-'),
+                      _buildDetailItem('Dikembalikan Pada', _formatTimestamp(kondisiAkhir['timestamp'] as Timestamp?)),
                     ],
                   ],
                 ),
@@ -336,17 +496,36 @@ class BerhasilPengembalianPage extends StatelessWidget {
 
   Widget _buildTimeline() {
     final steps = [
-      'Pengajuan oleh peminjam',
-      'Approval Penanggung Jawab',
-      'Verifikasi oleh Operator',
-      'Approval Manager Umum',
-      'Pengembalian Selesai',
+      {'label': 'Pengajuan oleh peminjam', 'status': 'SUBMITTED'},
+      {'label': 'Approval Manager Divisi', 'status': 'APPROVAL_1'},
+      {'label': 'Verifikasi oleh Operator', 'status': 'APPROVAL_2'},
+      {'label': 'Approval Manager Umum', 'status': 'APPROVAL_3'},
+      {'label': 'Kendaraan Digunakan', 'status': 'ON_GOING'},
+      {'label': 'Pengembalian Selesai', 'status': 'DONE'},
     ];
 
     return Column(
       children: List.generate(steps.length, (index) {
-        final isActive = index <= 4; // Semua step aktif (sampai pengembalian)
+        final step = steps[index];
+        final isActive = index <= 5; // Semua aktif karena sudah selesai
         final isLast = index == steps.length - 1;
+
+        // Cari timestamp dari approval history
+        final history = _approvalHistory.firstWhere(
+          (h) => h['newStatus'] == step['status'],
+          orElse: () => {},
+        );
+
+        String timeText = 'Menunggu';
+        if (history.isNotEmpty && history['timestamp'] != null) {
+          timeText = _formatTimestamp(history['timestamp']);
+        } else if (step['status'] == 'SUBMITTED' && _bookingData?['createdAt'] != null) {
+          timeText = _formatTimestamp(_bookingData!['createdAt']);
+        } else if (step['status'] == 'ON_GOING' && _bookingData?['actualPickupTime'] != null) {
+          timeText = _formatTimestamp(_bookingData!['actualPickupTime']);
+        } else if (step['status'] == 'DONE' && _bookingData?['actualReturnTime'] != null) {
+          timeText = _formatTimestamp(_bookingData!['actualReturnTime']);
+        }
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -392,7 +571,7 @@ class BerhasilPengembalianPage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      steps[index],
+                      step['label']!,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -403,7 +582,7 @@ class BerhasilPengembalianPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _getTimelineDate(index),
+                      timeText,
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey.shade500,
@@ -444,16 +623,5 @@ class BerhasilPengembalianPage extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _getTimelineDate(int step) {
-    final dates = [
-      data['tanggalPengajuan'] ?? 'Hari ini, 09:30',
-      data['tanggalApproval1'] ?? '20 Jan, 10:15',
-      data['tanggalApproval2'] ?? '20 Jan, 11:30',
-      data['tanggalApproval3'] ?? '20 Jan, 14:00',
-      'Selesai, ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}',
-    ];
-    return dates[step];
   }
 }

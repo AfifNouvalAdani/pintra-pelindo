@@ -1,9 +1,31 @@
 import 'package:flutter/material.dart';
 import '../vehicle/berhasil_pengembalian_page.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 
 
 class FormPengembalianKendaraanPage extends StatefulWidget {
-  const FormPengembalianKendaraanPage({super.key});
+  final String role;
+  final String userName;
+  final String userId;
+  final String bookingId;
+  final String vehicleId;
+  final Map<String, dynamic>? vehicleData;
+  final Map<String, dynamic> bookingData;
+
+  const FormPengembalianKendaraanPage({
+    super.key,
+    required this.role,
+    required this.userName,
+    required this.userId,
+    required this.bookingId,
+    required this.vehicleId,
+    this.vehicleData,
+    required this.bookingData,
+  });
 
   @override
   State<FormPengembalianKendaraanPage> createState() =>
@@ -111,7 +133,10 @@ class _FormPengembalianKendaraanPageState
     );
   }
 
-  void _simpanForm() {
+  bool _isSaving = false;
+
+  Future<void> _simpanForm() async {
+    // Validasi form
     if (kondisi == null) {
       _showSnackBar('Pilih kondisi kendaraan saat pengembalian');
       return;
@@ -149,8 +174,120 @@ class _FormPengembalianKendaraanPageState
       return;
     }
 
-    // Simpan data ke firestore
-    _showSuccessDialog();
+    final int? odometerValue = int.tryParse(odoController.text);
+    if (odometerValue == null) {
+      _showSnackBar('Odometer harus berupa angka');
+      return;
+    }
+
+    // ✅ MULAI PROSES SIMPAN
+    setState(() => _isSaving = true);
+
+    try {
+      // 1️⃣ CEK STATUS BOOKING
+      final bookingDoc = await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .doc(widget.bookingId)
+          .get();
+
+      if (!bookingDoc.exists) {
+        throw Exception('Data peminjaman tidak ditemukan');
+      }
+
+      final currentStatus = bookingDoc.data()?['status'];
+      if (currentStatus != 'ON_GOING') {
+        throw Exception('Peminjaman tidak dalam status ON_GOING');
+      }
+
+      // 2️⃣ SIAPKAN DATA KONDISI AKHIR
+      Map<String, dynamic> kondisiAkhirData = {
+        'kondisi': kondisi,
+        'kelengkapan': kelengkapan,
+        'kelengkapanItems': {
+          'p3k': p3k,
+          'dongkrak': dongkrak,
+          'segitiga': segitiga,
+        },
+        'sisaBBM': sisaBBM,
+        'odometerAkhir': odometerValue,
+        'timestamp': Timestamp.now(),
+        'filledBy': widget.userId,
+        'filledByName': widget.userName,
+      };
+
+      // Tambahkan uraian jika kondisi tidak baik
+      if (kondisi == 'Tidak Baik' && uraianKondisiController.text.isNotEmpty) {
+        kondisiAkhirData['uraianKondisi'] = uraianKondisiController.text;
+      }
+
+      // Tambahkan uraian jika kelengkapan tidak lengkap
+      if (kelengkapan == 'Tidak Lengkap' && uraianKelengkapanController.text.isNotEmpty) {
+        kondisiAkhirData['uraianKelengkapan'] = uraianKelengkapanController.text;
+      }
+
+      // Tambahkan foto sebagai base64 jika ada
+      if (_photoBase64 != null && _photoBase64!.isNotEmpty) {
+        kondisiAkhirData['fotoBase64'] = _photoBase64;
+        kondisiAkhirData['fotoTimestamp'] = Timestamp.now();
+      }
+
+      // 3️⃣ UPDATE DOCUMENT VEHICLE_BOOKINGS
+      await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .doc(widget.bookingId)
+          .update({
+        'kondisiAkhir': kondisiAkhirData,
+        'status': 'DONE',
+        'actualReturnTime': Timestamp.now(),
+        'updatedAt': Timestamp.now(),
+      });
+
+      print('✅ Booking updated to DONE');
+
+      // 4️⃣ UPDATE ODOMETER DI COLLECTION VEHICLES
+      await FirebaseFirestore.instance
+          .collection('vehicles')
+          .doc(widget.vehicleId)
+          .update({
+        'odometerTerakhir': odometerValue,
+        'updatedAt': Timestamp.now(),
+      });
+
+      print('✅ Vehicle odometer updated');
+
+      // 5️⃣ TAMBAHKAN LOG DI APPROVAL_HISTORY
+      await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .doc(widget.bookingId)
+          .collection('approval_history')
+          .add({
+        'action': 'VEHICLE_RETURNED',
+        'oldStatus': 'ON_GOING',
+        'newStatus': 'DONE',
+        'status': 'DONE', // ✅ TAMBAHKAN INI - Penting untuk timeline
+        'actionBy': widget.userName,
+        'actionRole': widget.role, // ✅ Tambahkan role
+        'userId': widget.userId,
+        'timestamp': Timestamp.now(),
+        'note': 'Kendaraan telah dikembalikan dan kondisi akhir telah dicatat oleh ${widget.userName}',
+        'odometerAkhir': odometerValue,
+      });
+      print('✅ Approval history added');
+
+      setState(() => _isSaving = false);
+
+      if (mounted) {
+        // 6️⃣ NAVIGASI KE HALAMAN BERHASIL
+        _showSuccessDialog();
+      }
+    } catch (e) {
+      setState(() => _isSaving = false);
+      print('❌ Error saving form: $e');
+      
+      if (mounted) {
+        _showSnackBar('Gagal menyimpan: ${e.toString()}');
+      }
+    }
   }
 
   void _showSnackBar(String message) {
@@ -166,48 +303,97 @@ class _FormPengembalianKendaraanPageState
     );
   }
 
-  void _showSuccessDialog() {
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(
-      builder: (_) => BerhasilPengembalianPage(
-        data: {
-          'id': 'PMJ-20250120-001',
-          'nama': 'Tono',
-          'nipp': '103884',
-          'divisi': 'Teknologi Informasi',
-          'keperluan': 'SPPD',
-          'tujuan': 'Kota Semarang, Jawa Tengah',
-          'tglPinjam': '12 September 2025',
-          'jamPinjam': '07:00',
-          'tglKembali': '14 September 2025',
-          'jamKembali': '21:00',
-          'kendaraan': 'Innova Zenix W 111 PI',
-        },
+void _showSuccessDialog() {
+  if (mounted) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BerhasilPengembalianPage(
+          bookingId: widget.bookingId, // ✅ Cukup kirim ID saja
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
-  void _uploadFoto() {
-    // Simulasi upload foto
-    setState(() {
-      _isUploading = true;
-    });
+File? _photoFile;
+String? _photoBase64;
 
-    Future.delayed(const Duration(seconds: 2), () {
+Future<void> _uploadFoto() async {
+  try {
+    final ImagePicker picker = ImagePicker();
+    
+    // Tampilkan pilihan: Kamera atau Galeri
+    final ImageSource? source = await showDialog<ImageSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pilih Sumber Foto'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Kamera'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Galeri'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
+    final XFile? image = await picker.pickImage(
+      source: source,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 70,
+    );
+
+    if (image != null) {
+      setState(() => _isUploading = true);
+
+      final bytes = await File(image.path).readAsBytes();
+      final base64String = base64Encode(bytes);
+      
+      final sizeInKB = base64String.length * 0.75 / 1024;
+      
+      if (sizeInKB > 800) {
+        if (mounted) {
+          _showSnackBar('Foto terlalu besar (${sizeInKB.toStringAsFixed(0)}KB). Maksimal 800KB');
+        }
+        setState(() => _isUploading = false);
+        return;
+      }
+
       setState(() {
-        _isUploading = false;
+        _photoFile = File(image.path);
+        _photoBase64 = base64String;
         _hasPhoto = true;
+        _isUploading = false;
       });
-    });
+    }
+  } catch (e) {
+    print('Error picking image: $e');
+    setState(() => _isUploading = false);
+    if (mounted) {
+      _showSnackBar('Gagal mengambil foto');
+    }
   }
+}
 
-  void _hapusFoto() {
-    setState(() {
-      _hasPhoto = false;
-    });
-  }
+void _hapusFoto() {
+  setState(() {
+    _hasPhoto = false;
+    _photoFile = null;
+    _photoBase64 = null;
+  });
+}
 
   @override
   Widget build(BuildContext context) {
@@ -968,9 +1154,9 @@ class _FormPengembalianKendaraanPageState
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _simpanForm,
+                  onPressed: _isSaving ? null : _simpanForm,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade700,
+                    backgroundColor: _isSaving ? Colors.grey.shade400 : Colors.blue.shade700,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
@@ -978,13 +1164,35 @@ class _FormPengembalianKendaraanPageState
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  child: const Text(
-                    'Simpan Pengembalian',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: _isSaving
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Menyimpan...',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        )
+                      : const Text(
+                          'Simpan Pengembalian',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
 

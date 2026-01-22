@@ -1,160 +1,312 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import '../vehicle/detail_peminjaman_page.dart';
 
 class ApprovalKendaraanPage extends StatefulWidget {
-  const ApprovalKendaraanPage({super.key});
+  final String role;
+  final String userName;
+  final String userId;
+  final String userDivision;
+  final String userJabatan;
+
+  const ApprovalKendaraanPage({
+    super.key,
+    required this.role,
+    required this.userName,
+    required this.userId,
+    required this.userDivision,
+    required this.userJabatan,
+  });
 
   @override
   State<ApprovalKendaraanPage> createState() => _ApprovalKendaraanPageState();
 }
 
 class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
-  String activeFilter = 'all';
   String sortOrder = 'terbaru';
   DateTime? startDate;
   DateTime? endDate;
-  List<String> selectedCategories = [];
-
-  final List<String> categories = [
-    'Permohonan Approval',
-    'Permohonan Pembatalan',
-    'Ditolak',
-    'Disetujui',
-    'Dibatalkan',
-  ];
-
+  List<String> selectedStatuses = [];
   
-
-  final List<Map<String, dynamic>> allData = [
-    {
-      'id': 'PMN-2025-001',
-      'title': 'Peminjaman Mobil 21 Januari 2025',
-      'kendaraan': 'Innova Zenix',
-      'tujuan': 'Semarang, Jawa Tengah',
-      'peminjam': 'Budi Santoso',
-      'nipp': '103456',
-      'divisi': 'Operasional',
-      'status': 'Permohonan Approval',
-      'tanggal': DateTime(2025, 1, 21),
-      'jam': '08:30',
-      'keperluan': 'SPPD Dinas',
-      'nomor': '123/SPPD/2025',
-      'tglPinjam': '21 Jan 2025',
-      'jamPinjam': '08:30',
-      'tglKembali': '22 Jan 2025',
-      'jamKembali': '17:00',
-    },
-    {
-      'id': 'PMN-2025-002',
-      'title': 'Peminjaman Mobil 20 Januari 2025',
-      'kendaraan': 'Xenia Hitam',
-      'tujuan': 'Cilacap, Jawa Tengah',
-      'peminjam': 'Aris Setiawan',
-      'nipp': '103457',
-      'divisi': 'SDM',
-      'status': 'Ditolak',
-      'tanggal': DateTime(2025, 1, 20),
-      'jam': '09:15',
-      'keperluan': 'Undangan',
-      'nomor': 'UND-012/2025',
-      'tglPinjam': '20 Jan 2025',
-      'jamPinjam': '09:15',
-      'tglKembali': '20 Jan 2025',
-      'jamKembali': '18:00',
-    },
-    {
-      'id': 'PMN-2025-003',
-      'title': 'Peminjaman Mobil 19 Januari 2025',
-      'kendaraan': 'Avanza Hitam',
-      'tujuan': 'Probolinggo, Jawa Timur',
-      'peminjam': 'Afif Hidayat',
-      'nipp': '103458',
-      'divisi': 'Teknologi Informasi',
-      'status': 'Disetujui',
-      'tanggal': DateTime(2025, 1, 19),
-      'jam': '10:00',
-      'keperluan': 'SPPD Dinas',
-      'nomor': '124/SPPD/2025',
-      'tglPinjam': '19 Jan 2025',
-      'jamPinjam': '10:00',
-      'tglKembali': '21 Jan 2025',
-      'jamKembali': '16:30',
-    },
-    {
-      'id': 'PMN-2025-004',
-      'title': 'Peminjaman Mobil 18 Januari 2025',
-      'kendaraan': 'Innova Putih',
-      'tujuan': 'Jakarta',
-      'peminjam': 'Tono Wijaya',
-      'nipp': '103459',
-      'divisi': 'Keuangan',
-      'status': 'Permohonan Pembatalan',
-      'tanggal': DateTime(2025, 1, 18),
-      'jam': '14:30',
-      'keperluan': 'Kegiatan Lainnya',
-      'nomor': '',
-      'tglPinjam': '18 Jan 2025',
-      'jamPinjam': '14:30',
-      'tglKembali': '19 Jan 2025',
-      'jamKembali': '12:00',
-    },
-    {
-      'id': 'PMN-2025-005',
-      'title': 'Peminjaman Mobil 17 Januari 2025',
-      'kendaraan': 'Xenia Putih',
-      'tujuan': 'Surabaya',
-      'peminjam': 'Sari Dewi',
-      'nipp': '103460',
-      'divisi': 'Pemasaran',
-      'status': 'Dibatalkan',
-      'tanggal': DateTime(2025, 1, 17),
-      'jam': '11:00',
-      'keperluan': 'SPPD Dinas',
-      'nomor': '125/SPPD/2025',
-      'tglPinjam': '17 Jan 2025',
-      'jamPinjam': '11:00',
-      'tglKembali': '18 Jan 2025',
-      'jamKembali': '15:00',
-    },
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _bookings = [];
+  List<Map<String, dynamic>> _filteredBookings = [];
+  String? _userJabatan; // Untuk menyimpan jabatan user
+  
+  final List<String> statusOptions = [
+    'SUBMITTED',
+    'APPROVAL_1',
+    'APPROVAL_2',
+    'APPROVAL_3',
+    'ON_GOING',
+    'DONE',
+    'CANCELLED',
   ];
 
-  List<Map<String, dynamic>> get filteredData {
-    List<Map<String, dynamic>> result = allData;
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserJabatan(); // Ambil jabatan user terlebih dahulu
+  }
 
-    // Filter berdasarkan kategori
-    if (selectedCategories.isNotEmpty) {
-      result = result.where((e) => selectedCategories.contains(e['status'])).toList();
+  // Ambil jabatan user dari Firestore jika tidak ada di widget
+  Future<void> _fetchUserJabatan() async {
+    if (widget.userJabatan.isNotEmpty) {
+      setState(() {
+        _userJabatan = widget.userJabatan;
+      });
+    } else {
+      try {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.userId)
+            .get();
+        
+        if (userDoc.exists) {
+          setState(() {
+            _userJabatan = userDoc.data()?['jabatan'] ?? 'Staff';
+          });
+        }
+      } catch (e) {
+        print('Error fetching user jabatan: $e');
+        setState(() {
+          _userJabatan = 'Staff';
+        });
+      }
+    }
+    
+    // Setelah dapat jabatan, set filter dan load bookings
+    _setDefaultFilters();
+    _loadBookings();
+  }
+
+  // Set filter default berdasarkan role dan jabatan
+  void _setDefaultFilters() {
+    // ✅ FIX: Manager Divisi (role user dengan jabatan Manager) melihat SUBMITTED
+    if (widget.role == 'admin') {
+      // Manager Umum melihat APPROVAL_2
+      selectedStatuses = ['APPROVAL_2'];
+    } else if (widget.role == 'user' && _userJabatan != null) {
+      // ✅ Cek apakah Manager Divisi
+      final isManagerDivisi = (_userJabatan ?? '').toLowerCase().contains('manager');
+      if (isManagerDivisi) {
+        selectedStatuses = ['SUBMITTED']; // Manager Divisi melihat SUBMITTED
+      } else {
+        selectedStatuses = []; // Staff tidak bisa approve
+      }
+    } else if (widget.role == 'operator') {
+      selectedStatuses = ['APPROVAL_1'];
+    } else if (widget.role == 'manager_umum') {
+      selectedStatuses = ['APPROVAL_2'];
+    } else {
+      selectedStatuses = [];
+    }
+  }
+
+  // Load bookings dari Firestore - LOGIC BARU
+Future<void> _loadBookings() async {
+  setState(() {
+    _isLoading = true;
+  });
+  
+  try {
+    QuerySnapshot snapshot;
+    
+    // ✅ Cek apakah Manager Divisi
+    final isManagerDivisi = (_userJabatan ?? '').toLowerCase().contains('manager');
+    
+    if (widget.role == 'admin') {
+      // ✅ Admin (Manager Umum) melihat booking yang APPROVAL_2
+      snapshot = await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .where('status', isEqualTo: 'APPROVAL_2')
+          .orderBy('createdAt', descending: true)
+          .get();
+          
+    } else if (widget.role == 'user' && isManagerDivisi) {
+      // ✅ Manager Divisi melihat SUBMITTED dari divisinya
+      snapshot = await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .where('divisi', isEqualTo: widget.userDivision)
+          .where('status', isEqualTo: 'SUBMITTED')
+          .orderBy('createdAt', descending: true)
+          .get();
+          
+    } else if (widget.role == 'operator') {
+      // Operator melihat semua booking yang APPROVAL_1
+      snapshot = await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .where('status', isEqualTo: 'APPROVAL_1')
+          .orderBy('createdAt', descending: true)
+          .get();
+          
+    } else if (widget.role == 'manager_umum') {
+      // Manager Umum melihat semua booking yang APPROVAL_2
+      snapshot = await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .where('status', isEqualTo: 'APPROVAL_2')
+          .orderBy('createdAt', descending: true)
+          .get();
+          
+    } else {
+      // Role tidak memiliki akses approval
+      setState(() {
+        _bookings = [];
+        _filteredBookings = [];
+        _isLoading = false;
+      });
+      return;
     }
 
-    // Filter berdasarkan tanggal
+      final bookings = await Future.wait(snapshot.docs.map((doc) async {
+        final data = doc.data() as Map<String, dynamic>;
+        
+        // Ambil data kendaraan
+        Map<String, dynamic>? vehicleData;
+        if (data['vehicleId'] != null) {
+          try {
+            final vehicleDoc = await FirebaseFirestore.instance
+                .collection('vehicles')
+                .doc(data['vehicleId'])
+                .get();
+            
+            if (vehicleDoc.exists) {
+              vehicleData = {
+                'id': vehicleDoc.id,
+                ...vehicleDoc.data() as Map<String, dynamic>,
+              };
+            }
+          } catch (e) {
+            print('Error fetching vehicle data: $e');
+          }
+        }
+
+        // Format data untuk UI
+        final waktuPinjam = data['waktuPinjam'] is Timestamp
+            ? (data['waktuPinjam'] as Timestamp).toDate()
+            : null;
+        final waktuKembali = data['waktuKembali'] is Timestamp
+            ? (data['waktuKembali'] as Timestamp).toDate()
+            : null;
+        final createdAt = data['createdAt'] is Timestamp
+            ? (data['createdAt'] as Timestamp).toDate()
+            : DateTime.now();
+
+        return {
+          'id': doc.id,
+          'bookingId': doc.id,
+          'title': 'Peminjaman ${data['tujuan'] ?? '-'}',
+          'kendaraan': data['vehicle'] != null 
+              ? (data['vehicle'] as Map<String, dynamic>)['nama'] ?? 'Kendaraan'
+              : vehicleData?['nama'] ?? 'Kendaraan',
+          'platNomor': data['vehicle'] != null 
+              ? (data['vehicle'] as Map<String, dynamic>)['platNomor'] ?? '-'
+              : vehicleData?['platNomor'] ?? '-',
+          'tujuan': data['tujuan'] ?? '-',
+          'peminjam': data['namaPeminjam'] ?? 'Peminjam',
+          'peminjamId': data['peminjamId'] ?? '',
+          'divisi': data['divisi'] ?? '-',
+          'status': data['status'] ?? 'SUBMITTED',
+          'statusText': _getStatusText(data['status'] ?? 'SUBMITTED'),
+          'tanggal': createdAt,
+          'jam': DateFormat('HH:mm').format(createdAt),
+          'keperluan': data['keperluan'] ?? '-',
+          'nomorSurat': data['nomorSurat'] ?? '-',
+          'alasan': data['alasan'] ?? '-',
+          'tglPinjam': waktuPinjam != null ? DateFormat('dd MMM yyyy').format(waktuPinjam) : '-',
+          'jamPinjam': waktuPinjam != null ? DateFormat('HH:mm').format(waktuPinjam) : '-',
+          'tglKembali': waktuKembali != null ? DateFormat('dd MMM yyyy').format(waktuKembali) : '-',
+          'jamKembali': waktuKembali != null ? DateFormat('HH:mm').format(waktuKembali) : '-',
+          'createdAt': createdAt,
+          'waktuPinjam': waktuPinjam,
+          'waktuKembali': waktuKembali,
+          'vehicleId': data['vehicleId'],
+          'vehicleData': vehicleData,
+          'bookingData': data,
+        };
+      }));
+
+      setState(() {
+        _bookings = bookings;
+        _applyFilters();
+        _isLoading = false;
+      });
+
+      } catch (e) {
+        print('Error loading bookings: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal memuat data: $e'),
+              backgroundColor: Colors.red.shade600,
+            ),
+          );
+        }
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+
+  // Apply filters
+  void _applyFilters() {
+    List<Map<String, dynamic>> result = List.from(_bookings);
+
+    // Filter berdasarkan status
+    if (selectedStatuses.isNotEmpty) {
+      result = result.where((e) => selectedStatuses.contains(e['status'])).toList();
+    }
+
+    // Filter berdasarkan tanggal (createdAt)
     if (startDate != null && endDate != null) {
       result = result.where((e) {
-        final itemDate = e['tanggal'];
-        return (itemDate.isAfter(startDate!) || itemDate.isAtSameMomentAs(startDate!)) &&
-               (itemDate.isBefore(endDate!) || itemDate.isAtSameMomentAs(endDate!));
+        final itemDate = e['createdAt'] as DateTime?;
+        if (itemDate == null) return false;
+        
+        final normalizedDate = DateTime(itemDate.year, itemDate.month, itemDate.day);
+        final normalizedStart = DateTime(startDate!.year, startDate!.month, startDate!.day);
+        final normalizedEnd = DateTime(endDate!.year, endDate!.month, endDate!.day);
+        
+        return (normalizedDate.isAfter(normalizedStart) || normalizedDate.isAtSameMomentAs(normalizedStart)) &&
+               (normalizedDate.isBefore(normalizedEnd) || normalizedDate.isAtSameMomentAs(normalizedEnd));
       }).toList();
     }
 
     // Sort berdasarkan tanggal
     if (sortOrder == 'terbaru') {
-      result.sort((a, b) => b['tanggal'].compareTo(a['tanggal']));
+      result.sort((a, b) {
+        final aDate = a['createdAt'] as DateTime?;
+        final bDate = b['createdAt'] as DateTime?;
+        return (bDate ?? DateTime(1970)).compareTo(aDate ?? DateTime(1970));
+      });
     } else {
-      result.sort((a, b) => a['tanggal'].compareTo(b['tanggal']));
+      result.sort((a, b) {
+        final aDate = a['createdAt'] as DateTime?;
+        final bDate = b['createdAt'] as DateTime?;
+        return (aDate ?? DateTime(1970)).compareTo(bDate ?? DateTime(1970));
+      });
     }
 
-    return result;
-  }
-
-  void _resetFilters() {
     setState(() {
-      selectedCategories.clear();
-      startDate = null;
-      endDate = null;
+      _filteredBookings = result;
     });
   }
 
+  // Reset filters
+  void _resetFilters() {
+    setState(() {
+      selectedStatuses.clear();
+      startDate = null;
+      endDate = null;
+      _setDefaultFilters();
+      _applyFilters();
+    });
+  }
+
+  // Show filter dialog
   Future<void> _showFilterDialog(BuildContext context) async {
-    final tempCategories = List<String>.from(selectedCategories);
+    final tempStatuses = List<String>.from(selectedStatuses);
     DateTime? tempStartDate = startDate;
     DateTime? tempEndDate = endDate;
 
@@ -170,7 +322,7 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Kategori Status',
+                    'Status',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -181,32 +333,33 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: categories.map((category) {
-                      final isSelected = tempCategories.contains(category);
+                    children: statusOptions.map((status) {
+                      final isSelected = tempStatuses.contains(status);
                       return FilterChip(
-                        label: Text(category),
+                        label: Text(_getStatusText(status)),
                         selected: isSelected,
                         onSelected: (selected) {
                           setDialogState(() {
                             if (selected) {
-                              tempCategories.add(category);
+                              tempStatuses.add(status);
                             } else {
-                              tempCategories.remove(category);
+                              tempStatuses.remove(status);
                             }
                           });
                         },
                         backgroundColor: Colors.grey.shade100,
-                        selectedColor: Colors.blue.shade100,
+                        selectedColor: _getStatusColor(status).withOpacity(0.2),
                         labelStyle: TextStyle(
-                          color: isSelected ? Colors.blue.shade800 : Colors.grey.shade700,
+                          color: isSelected ? _getStatusColor(status) : Colors.grey.shade700,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                         ),
-                        checkmarkColor: Colors.blue.shade700,
+                        checkmarkColor: _getStatusColor(status),
                       );
                     }).toList(),
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Periode Tanggal',
+                    'Periode Tanggal Pengajuan',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -223,7 +376,7 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
                               context: context,
                               initialDate: DateTime.now(),
                               firstDate: DateTime(2024),
-                              lastDate: DateTime(2026),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
                             );
                             if (date != null) {
                               setDialogState(() => tempStartDate = date);
@@ -248,7 +401,7 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
                                 const SizedBox(height: 4),
                                 Text(
                                   tempStartDate != null
-                                      ? '${tempStartDate!.day}/${tempStartDate!.month}/${tempStartDate!.year}'
+                                      ? DateFormat('dd/MM/yyyy').format(tempStartDate!)
                                       : 'Pilih tanggal',
                                   style: TextStyle(
                                     fontSize: 14,
@@ -268,7 +421,7 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
                               context: context,
                               initialDate: DateTime.now(),
                               firstDate: DateTime(2024),
-                              lastDate: DateTime(2026),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
                             );
                             if (date != null) {
                               setDialogState(() => tempEndDate = date);
@@ -293,7 +446,7 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
                                 const SizedBox(height: 4),
                                 Text(
                                   tempEndDate != null
-                                      ? '${tempEndDate!.day}/${tempEndDate!.month}/${tempEndDate!.year}'
+                                      ? DateFormat('dd/MM/yyyy').format(tempEndDate!)
                                       : 'Pilih tanggal',
                                   style: TextStyle(
                                     fontSize: 14,
@@ -312,9 +465,7 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
             ),
             actions: [
               TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
+                onPressed: () => Navigator.pop(context),
                 child: Text(
                   'Batal',
                   style: TextStyle(color: Colors.grey.shade600),
@@ -323,7 +474,7 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
               TextButton(
                 onPressed: () {
                   setDialogState(() {
-                    tempCategories.clear();
+                    tempStatuses.clear();
                     tempStartDate = null;
                     tempEndDate = null;
                   });
@@ -336,7 +487,7 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
               ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context, {
-                    'categories': tempCategories,
+                    'statuses': tempStatuses,
                     'startDate': tempStartDate,
                     'endDate': tempEndDate,
                   });
@@ -352,16 +503,17 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
       ),
     );
 
-    // Update state setelah dialog ditutup
     if (result != null) {
       setState(() {
-        selectedCategories = List<String>.from(result['categories']);
+        selectedStatuses = List<String>.from(result['statuses']);
         startDate = result['startDate'];
         endDate = result['endDate'];
       });
+      _applyFilters();
     }
   }
 
+  // Show sort dialog
   void _showSortDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -375,7 +527,10 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
                 value: 'terbaru',
                 groupValue: sortOrder,
                 onChanged: (value) {
-                  setState(() => sortOrder = value.toString());
+                  setState(() {
+                    sortOrder = value.toString();
+                    _applyFilters();
+                  });
                   Navigator.pop(context);
                 },
               ),
@@ -386,7 +541,10 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
                 value: 'terlama',
                 groupValue: sortOrder,
                 onChanged: (value) {
-                  setState(() => sortOrder = value.toString());
+                  setState(() {
+                    sortOrder = value.toString();
+                    _applyFilters();
+                  });
                   Navigator.pop(context);
                 },
               ),
@@ -398,8 +556,359 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
     );
   }
 
+  // Approve booking - LOGIC BARU dengan jabatan
+  Future<void> _approveBooking(Map<String, dynamic> booking) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: CircularProgressIndicator(
+          color: Colors.blue.shade700,
+        ),
+      ),
+    );
+
+    try {
+      String currentStatus = booking['status'];
+      String newStatus;
+      String actionText;
+      
+      // ✅ Cek apakah Manager Divisi
+      final isManagerDivisi = (_userJabatan ?? '').toLowerCase().contains('manager');
+      
+      // Tentukan status baru berdasarkan role dan jabatan
+      if (widget.role == 'user' && isManagerDivisi) {
+        // ✅ Manager Divisi mengubah SUBMITTED → APPROVAL_1
+        if (currentStatus != 'SUBMITTED') {
+          throw Exception('Hanya dapat menyetujui peminjaman dengan status SUBMITTED');
+        }
+        newStatus = 'APPROVAL_1';
+        actionText = 'Disetujui Manager Divisi';
+        
+      } else if (widget.role == 'operator') {
+        // Operator mengubah APPROVAL_1 → APPROVAL_2
+        if (currentStatus != 'APPROVAL_1') {
+          throw Exception('Hanya dapat menyetujui peminjaman dengan status APPROVAL_1');
+        }
+        newStatus = 'APPROVAL_2';
+        actionText = 'Diverifikasi Operator';
+        
+      } else if (widget.role == 'admin' || widget.role == 'manager_umum') {
+        // ✅ Admin/Manager Umum mengubah APPROVAL_2 → APPROVAL_3
+        if (currentStatus != 'APPROVAL_2') {
+          throw Exception('Hanya dapat menyetujui peminjaman dengan status APPROVAL_2');
+        }
+        newStatus = 'APPROVAL_3';
+        actionText = 'Disetujui Manager Umum';
+        
+      } else {
+        throw Exception('Role tidak memiliki izin untuk approval');
+      }
+
+      // Update status di Firestore
+      await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .doc(booking['bookingId'])
+          .update({
+        'status': newStatus,
+        'updatedAt': Timestamp.now(),
+        'lastApprovalBy': widget.userName,
+        'lastApprovalRole': widget.role,
+        'lastApprovalJabatan': _userJabatan,
+      });
+
+      // Tambahkan ke riwayat approval
+      await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .doc(booking['bookingId'])
+          .collection('approval_history')
+          .add({
+        'action': 'APPROVED',
+        'oldStatus': currentStatus,
+        'newStatus': newStatus,
+        'actionBy': widget.userName,
+        'actionRole': widget.role,
+        'actionJabatan': _userJabatan,
+        'userId': widget.userId,
+        'timestamp': Timestamp.now(),
+        'note': '$actionText oleh ${widget.userName}',
+      });
+
+      if (mounted) Navigator.pop(context);
+      await _loadBookings();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Peminjaman berhasil disetujui'),
+            backgroundColor: Colors.green.shade600,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menyetujui: $e'),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  // Reject booking
+  Future<void> _rejectBooking(Map<String, dynamic> booking, String reason) async {
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: CircularProgressIndicator(
+          color: Colors.blue.shade700,
+        ),
+      ),
+    );
+
+    try {
+      // Update status menjadi CANCELLED
+      await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .doc(booking['bookingId'])
+          .update({
+        'status': 'CANCELLED',
+        'rejectionReason': reason,
+        'rejectedBy': widget.userName,
+        'rejectedRole': widget.role,
+        'rejectedJabatan': _userJabatan,
+        'updatedAt': Timestamp.now(),
+      });
+
+      // Tambahkan ke riwayat approval
+      await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .doc(booking['bookingId'])
+          .collection('approval_history')
+          .add({
+        'action': 'REJECTED',
+        'oldStatus': booking['status'],
+        'newStatus': 'CANCELLED',
+        'actionBy': widget.userName,
+        'actionRole': widget.role,
+        'actionJabatan': _userJabatan,
+        'timestamp': Timestamp.now(),
+        'note': 'Ditolak oleh ${widget.userName} (${widget.role})',
+        'reason': reason,
+      });
+
+      // Close loading
+      if (mounted) Navigator.pop(context);
+
+      // Refresh data
+      await _loadBookings();
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Peminjaman berhasil ditolak'),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading
+      if (mounted) Navigator.pop(context);
+      
+      // Show error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menolak: $e'),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  // Get status text
+  String _getStatusText(String status) {
+    switch (status) {
+      case 'SUBMITTED':
+        return 'Menunggu Manager Divisi';
+      case 'APPROVAL_1':
+        return 'Menunggu Operator'; // ✅ Setelah Manager Divisi approve
+      case 'APPROVAL_2':
+        return 'Menunggu Manager Umum'; // ✅ Setelah Operator approve
+      case 'APPROVAL_3':
+        return 'Disetujui'; // ✅ Setelah Manager Umum approve
+      case 'ON_GOING':
+        return 'Sedang Digunakan';
+      case 'DONE':
+        return 'Selesai';
+      case 'CANCELLED':
+        return 'Ditolak';
+      default:
+        return status;
+    }
+  }
+
+  // Get status color
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'SUBMITTED':
+        return Colors.blue;
+      case 'APPROVAL_1':
+        return Colors.blue.shade700;
+      case 'APPROVAL_2':
+        return Colors.orange;
+      case 'APPROVAL_3':
+        return Colors.purple;
+      case 'ON_GOING':
+        return Colors.green;
+      case 'DONE':
+        return Colors.grey;
+      case 'CANCELLED':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  // Get status icon
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case 'SUBMITTED':
+        return Icons.access_time_rounded;
+      case 'APPROVAL_1':
+        return Icons.check_circle_outline_rounded;
+      case 'APPROVAL_2':
+        return Icons.verified_outlined;
+      case 'APPROVAL_3':
+        return Icons.thumb_up_alt_outlined;
+      case 'ON_GOING':
+        return Icons.directions_car;
+      case 'DONE':
+        return Icons.check_circle;
+      case 'CANCELLED':
+        return Icons.cancel;
+      default:
+        return Icons.info_outline_rounded;
+    }
+  }
+
+  // Check if user can approve based on role, jabatan and status
+bool _canApprove(String status) {
+  // ✅ Cek apakah Manager Divisi
+  final isManagerDivisi = (_userJabatan ?? '').toLowerCase().contains('manager');
+  
+  if (widget.role == 'user' && isManagerDivisi) {
+    return status == 'SUBMITTED'; // Manager Divisi approve SUBMITTED
+  } else if (widget.role == 'operator') {
+    return status == 'APPROVAL_1'; // Operator approve APPROVAL_1
+  } else if (widget.role == 'admin' || widget.role == 'manager_umum') {
+    return status == 'APPROVAL_2'; // Manager Umum approve APPROVAL_2
+  }
+  
+  return false;
+}
+
+  // Check if user can reject based on role, jabatan and status
+  bool _canReject(String status) {
+    return _canApprove(status); // Sama dengan canApprove
+  }
+
+  // Cek apakah user memiliki akses approval
+  bool _hasAccess() {
+    if (widget.role == 'admin') return true;
+    if (widget.role == 'operator') return true;
+    if (widget.role == 'manager_umum') return true;
+    
+    // ✅ Cek apakah Manager Divisi
+    if (widget.role == 'user') {
+      final isManagerDivisi = (_userJabatan ?? '').toLowerCase().contains('manager');
+      return isManagerDivisi;
+    }
+    
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Jika user tidak memiliki akses
+    if (!_hasAccess()) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Colors.grey.shade700,
+              size: 20,
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(
+            'Approval Kendaraan',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade900,
+            ),
+          ),
+          centerTitle: true,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.block,
+                size: 64,
+                color: Colors.grey.shade300,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Akses Ditolak',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Anda tidak memiliki izin untuk mengakses halaman approval',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Hitung statistik
+    final totalCount = _bookings.length;
+    final waitingCount = _bookings
+        .where((e) => _canApprove(e['status']))
+        .length;
+    final processedCount = _bookings
+        .where((e) => ['APPROVAL_1', 'APPROVAL_2', 'APPROVAL_3'].contains(e['status']))
+        .length;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -423,256 +932,313 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
         ),
         centerTitle: true,
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Stats
-          Container(
-            margin: const EdgeInsets.all(24),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.blue.shade100),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+      body: _isLoading || _userJabatan == null
+          ? Center(
+              child: CircularProgressIndicator(
+                color: Colors.blue.shade700,
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildStatItem(
-                  label: 'Total',
-                  value: allData.length.toString(),
-                  icon: Icons.list_alt_rounded,
-                  color: Colors.blue,
-                ),
-                _buildStatItem(
-                  label: 'Menunggu',
-                  value: allData.where((e) => e['status'] == 'Permohonan Approval').length.toString(),
-                  icon: Icons.access_time_rounded,
-                  color: Colors.orange,
-                ),
-                _buildStatItem(
-                  label: 'Selesai',
-                  value: allData.where((e) => e['status'] == 'Disetujui' || e['status'] == 'Ditolak').length.toString(),
-                  icon: Icons.check_circle_rounded,
-                  color: Colors.green,
-                ),
-              ],
-            ),
-          ),
-
-          // Filter Controls
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showFilterDialog(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.grey.shade700,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    icon: Icon(
-                      Icons.filter_alt_outlined,
-                      color: Colors.grey.shade600,
-                      size: 20,
-                    ),
-                    label: Text(
-                      selectedCategories.isNotEmpty || startDate != null
-                          ? 'Filter Aktif'
-                          : 'Filter',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                // Header Stats
+                Container(
+                  margin: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.blue.shade100),
                   ),
-                ),
-                const SizedBox(width: 12),
-                IconButton(
-                  onPressed: selectedCategories.isNotEmpty || startDate != null
-                      ? _resetFilters
-                      : null,
-                  icon: Icon(
-                    Icons.refresh_rounded,
-                    color: selectedCategories.isNotEmpty || startDate != null
-                        ? Colors.blue.shade700
-                        : Colors.grey.shade400,
-                  ),
-                  tooltip: 'Reset Filter',
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: () => _showSortDialog(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.grey.shade700,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                  ),
-                  icon: Icon(
-                    Icons.sort_rounded,
-                    color: Colors.grey.shade600,
-                    size: 20,
-                  ),
-                  label: const Text('Urutkan'),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Filter Status
-          if (selectedCategories.isNotEmpty || startDate != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Filter Aktif:',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      if (selectedCategories.isNotEmpty)
-                        ...selectedCategories.map((category) {
-                          return Chip(
-                            label: Text(category),
-                            backgroundColor: Colors.blue.shade100,
-                            deleteIcon: Icon(
-                              Icons.close_rounded,
-                              size: 16,
-                              color: Colors.blue.shade700,
-                            ),
-                            onDeleted: () {
-                              setState(() {
-                                selectedCategories.remove(category);
-                              });
-                            },
-                          );
-                        }).toList(),
-                      if (startDate != null && endDate != null)
-                        Chip(
-                          label: Text(
-                            '${startDate!.day}/${startDate!.month}/${startDate!.year} - ${endDate!.day}/${endDate!.month}/${endDate!.year}',
-                          ),
-                          backgroundColor: Colors.green.shade100,
-                          deleteIcon: Icon(
-                            Icons.close_rounded,
-                            size: 16,
-                            color: Colors.green.shade700,
-                          ),
-                          onDeleted: () {
-                            setState(() {
-                              startDate = null;
-                              endDate = null;
-                            });
-                          },
-                        ),
+                      _buildStatItem(
+                        label: 'Total',
+                        value: totalCount.toString(),
+                        icon: Icons.list_alt_rounded,
+                        color: Colors.blue,
+                      ),
+                      _buildStatItem(
+                        label: 'Menunggu',
+                        value: waitingCount.toString(),
+                        icon: Icons.access_time_rounded,
+                        color: Colors.orange,
+                      ),
+                      _buildStatItem(
+                        label: 'Diproses',
+                        value: processedCount.toString(),
+                        icon: Icons.sync_rounded,
+                        color: Colors.purple,
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                ],
-              ),
-            ),
+                ),
 
-          // List Header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Row(
-              children: [
-                Container(
-                  width: 4,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade700,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Daftar Approval',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade900,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '${filteredData.length} item',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Data List
-          Expanded(
-            child: filteredData.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.search_off_rounded,
-                          size: 64,
-                          color: Colors.grey.shade300,
+                // Filter Controls
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => _showFilterDialog(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.grey.shade700,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(color: Colors.grey.shade300),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          icon: Icon(
+                            Icons.filter_alt_outlined,
+                            color: Colors.grey.shade600,
+                            size: 20,
+                          ),
+                          label: Text(
+                            selectedStatuses.isNotEmpty || startDate != null
+                                ? 'Filter Aktif'
+                                : 'Filter',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 16),
+                      ),
+                      const SizedBox(width: 12),
+                      IconButton(
+                        onPressed: selectedStatuses.isNotEmpty || startDate != null
+                            ? _resetFilters
+                            : null,
+                        icon: Icon(
+                          Icons.refresh_rounded,
+                          color: selectedStatuses.isNotEmpty || startDate != null
+                              ? Colors.blue.shade700
+                              : Colors.grey.shade400,
+                        ),
+                        tooltip: 'Reset Filter',
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: () => _showSortDialog(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.grey.shade700,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
+                        icon: Icon(
+                          Icons.sort_rounded,
+                          color: Colors.grey.shade600,
+                          size: 20,
+                        ),
+                        label: const Text('Urutkan'),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Filter Status
+                if (selectedStatuses.isNotEmpty || startDate != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          'Tidak ada data',
+                          'Filter Aktif:',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 13,
                             color: Colors.grey.shade600,
                           ),
                         ),
                         const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if (selectedStatuses.isNotEmpty)
+                              ...selectedStatuses.map((status) {
+                                return Chip(
+                                  label: Text(_getStatusText(status)),
+                                  backgroundColor: _getStatusColor(status).withOpacity(0.1),
+                                  labelStyle: TextStyle(
+                                    color: _getStatusColor(status),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  deleteIcon: Icon(
+                                    Icons.close_rounded,
+                                    size: 16,
+                                    color: _getStatusColor(status),
+                                  ),
+                                  onDeleted: () {
+                                    setState(() {
+                                      selectedStatuses.remove(status);
+                                      _applyFilters();
+                                    });
+                                  },
+                                );
+                              }).toList(),
+                            if (startDate != null && endDate != null)
+                              Chip(
+                                label: Text(
+                                  '${DateFormat('dd/MM/yyyy').format(startDate!)} - ${DateFormat('dd/MM/yyyy').format(endDate!)}',
+                                ),
+                                backgroundColor: Colors.green.shade100,
+                                deleteIcon: Icon(
+                                  Icons.close_rounded,
+                                  size: 16,
+                                  color: Colors.green.shade700,
+                                ),
+                                onDeleted: () {
+                                  setState(() {
+                                    startDate = null;
+                                    endDate = null;
+                                    _applyFilters();
+                                  });
+                                },
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    ),
+                  ),
+
+                  // List Header
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 4,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade700,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+
+                        Expanded(
+                          child: Text(
+                            // ✅ FIX: Gunakan _isManagerDivisi seperti di dashboard
+                            () {
+                              final isManagerDivisi = (_userJabatan ?? '').toLowerCase().contains('manager');
+                              
+                              if (widget.role == 'user' && isManagerDivisi) {
+                                return 'Peminjaman Menunggu Approval Divisi ${widget.userDivision}';
+                              } else if (widget.role == 'operator') {
+                                return 'Peminjaman Menunggu Verifikasi Operator';
+                              } else if (widget.role == 'admin' || widget.role == 'manager_umum') {
+                                return 'Peminjaman Menunggu Approval Manager Umum';
+                              }
+                              return 'Peminjaman Menunggu Approval';
+                            }(),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade900,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+
+                        const SizedBox(width: 8),
+
                         Text(
-                          'Coba ubah filter atau periode tanggal',
+                          '${_filteredBookings.length} item',
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             color: Colors.grey.shade500,
                           ),
                         ),
                       ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                    itemCount: filteredData.length,
-                    itemBuilder: (context, index) {
-                      final item = filteredData[index];
-                      return _buildApprovalCard(item);
-                    },
+                    )
                   ),
-          ),
-        ],
-      ),
+
+                  // Data List
+                  Expanded(
+                    child: _filteredBookings.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.search_off_rounded,
+                                  size: 64,
+                                  color: Colors.grey.shade300,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Tidak ada data',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  // ✅ FIX: Gunakan _isManagerDivisi
+                                  () {
+                                    final isManagerDivisi = (_userJabatan ?? '').toLowerCase().contains('manager');
+                                    
+                                    if (widget.role == 'user' && isManagerDivisi) {
+                                      return 'Tidak ada peminjaman yang menunggu approval dari divisi ${widget.userDivision}';
+                                    } else if (widget.role == 'operator') {
+                                      return 'Tidak ada peminjaman yang menunggu verifikasi operator';
+                                    } else if (widget.role == 'admin' || widget.role == 'manager_umum') {
+                                      return 'Tidak ada peminjaman yang menunggu approval manager umum';
+                                    }
+                                    return 'Tidak ada peminjaman';
+                                  }(),
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade500,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                ElevatedButton.icon(
+                                  onPressed: _loadBookings,
+                                  icon: const Icon(Icons.refresh),
+                                  label: const Text('Muat Ulang'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue.shade700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _loadBookings,
+                            color: Colors.blue.shade700,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                              itemCount: _filteredBookings.length,
+                              itemBuilder: (context, index) {
+                                final item = _filteredBookings[index];
+                                return _buildApprovalCard(item);
+                              },
+                            ),
+                          ),
+                  ),
+              ],
+            ),
     );
   }
 
@@ -718,12 +1284,16 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
   }
 
   Widget _buildApprovalCard(Map<String, dynamic> item) {
-  final statusColor = _getStatusColor(item['status']);
-  final statusIcon = _getStatusIcon(item['status']);
+  final status = item['status'];
+  final statusText = item['statusText'];
+  final statusColor = _getStatusColor(status);
+  final statusIcon = _getStatusIcon(status);
+  final canApprove = _canApprove(status);
+  final canReject = _canReject(status);
 
   return Container(
     margin: const EdgeInsets.only(bottom: 16),
-    padding: const EdgeInsets.all(20),
+    padding: const EdgeInsets.all(16), // DIKURANGI DARI 20
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
@@ -762,26 +1332,26 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item['id'],
+                    item['bookingId'].substring(0, 8).toUpperCase(),
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       color: Colors.grey.shade600,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    item['title'],
+                    '${item['kendaraan']} - ${item['platNomor']}',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: Colors.grey.shade900,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${item['tanggal'].day}/${item['tanggal'].month}/${item['tanggal'].year} • ${item['jam']}',
+                    '${DateFormat('dd/MM/yyyy').format(item['tanggal'])} • ${item['jam']}',
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       color: Colors.grey.shade500,
                     ),
                   ),
@@ -789,9 +1359,10 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
               ),
             ),
             Container(
+              constraints: const BoxConstraints(maxWidth: 100),
               padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 6,
+                horizontal: 6,
+                vertical: 4,
               ),
               decoration: BoxDecoration(
                 color: statusColor.withOpacity(0.1),
@@ -799,312 +1370,153 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage> {
                 border: Border.all(color: statusColor.withOpacity(0.2)),
               ),
               child: Text(
-                item['status'],
+                statusText,
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 10,
                   fontWeight: FontWeight.w600,
                   color: statusColor,
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
               ),
             ),
           ],
         ),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Divider(color: Colors.grey.shade200),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
         // Detail Peminjaman
         _buildDetailRow(
           icon: Icons.person_outline_rounded,
           label: 'Peminjam',
-          value: '${item['peminjam']} (${item['nipp']})',
+          value: item['peminjam'],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         _buildDetailRow(
           icon: Icons.business_rounded,
           label: 'Divisi',
           value: item['divisi'],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         _buildDetailRow(
           icon: Icons.directions_car_rounded,
           label: 'Kendaraan',
-          value: item['kendaraan'],
+          value: '${item['kendaraan']} (${item['platNomor']})',
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         _buildDetailRow(
           icon: Icons.location_on_rounded,
           label: 'Tujuan',
           value: item['tujuan'],
         ),
+        const SizedBox(height: 8),
+        _buildDetailRow(
+          icon: Icons.calendar_today_rounded,
+          label: 'Waktu Pinjam',
+          value: '${item['tglPinjam']} ${item['jamPinjam']}',
+        ),
+        const SizedBox(height: 8),
+        _buildDetailRow(
+          icon: Icons.calendar_today_rounded,
+          label: 'Waktu Kembali',
+          value: '${item['tglKembali']} ${item['jamKembali']}',
+        ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
 
         // Tombol Aksi
-        Row(
-          children: [
-            // Tombol Lihat Detail
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => DetailPeminjamanPage(
-                        data: {
-                          'id': item['id'],
-                          'nama': item['peminjam'],
-                          'nipp': item['nipp'],
-                          'divisi': item['divisi'],
-                          'keperluan': item['keperluan'],
-                          'nomor': item['nomor'],
-                          'tujuan': item['tujuan'],
-                          'kendaraan': item['kendaraan'],
-                          'tglPinjam': item['tglPinjam'],
-                          'jamPinjam': item['jamPinjam'],
-                          'tglKembali': item['tglKembali'],
-                          'jamKembali': item['jamKembali'],
-                        },
-                        approvalStep: 0,
-                        isApprovalMode: true, // <- mode admin
-                      ),
-                    ),
-                  );
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.blue.shade700,
-                  side: BorderSide(color: Colors.blue.shade700, width: 1.5),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  textStyle: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.visibility_outlined,
-                      size: 18,
-                      color: Colors.blue.shade700,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Lihat Detail'),
-                  ],
-                ),
-              ),
-            ),
-            
-            const SizedBox(width: 12),
-            
-            // Tombol Setujui (hanya untuk Permohonan Approval)
-            if (item['status'] == 'Permohonan Approval')
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Tampilkan dialog konfirmasi
-                    _showApprovalConfirmationDialog(context, item);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green.shade600,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    textStyle: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.check_circle_outline_rounded,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('Setujui'),
-                    ],
-                  ),
-                ),
-              ),
-            
-            // Tombol Aksi lain untuk status yang berbeda
-            if (item['status'] == 'Permohonan Pembatalan')
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Proses pembatalan
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange.shade600,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    textStyle: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.history_toggle_off_rounded,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('Proses'),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        ),
+        if (canApprove || canReject)
+          _buildActionButtons(item, canApprove, canReject),
       ],
     ),
   );
 }
 
-// Tambahkan fungsi untuk dialog konfirmasi approval
-void _showApprovalConfirmationDialog(BuildContext context, Map<String, dynamic> item) {
-  showDialog(
-    context: context,
-    builder: (context) => Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      elevation: 0,
-      backgroundColor: Colors.white,
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Icon Konfirmasi
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.question_mark_rounded,
-                size: 32,
-                color: Colors.blue.shade700,
-              ),
-            ),
-            
-            const SizedBox(height: 20),
-            
-            // Judul Dialog
-            Text(
-              'Konfirmasi Approval',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade900,
-              ),
-            ),
-            
-            const SizedBox(height: 12),
-            
-            // Pesan Konfirmasi
-            Text(
-              'Apakah Anda yakin ingin menyetujui peminjaman ini?',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 15,
-                color: Colors.grey.shade700,
-                height: 1.4,
-              ),
-            ),
-            
-            const SizedBox(height: 32),
-            
-            // Tombol Aksi
-            Row(
-              children: [
-                // Tombol Batal (Merah)
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.shade50,
-                      foregroundColor: Colors.red.shade700,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: Colors.red.shade200,
-                          width: 1.5,
+  Widget _buildActionButtons(Map<String, dynamic> item, bool canApprove, bool canReject) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Jika lebar kurang dari 400, gunakan layout vertikal
+        if (constraints.maxWidth < 400) {
+          return Column(
+            children: [
+              // Tombol Lihat Detail
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DetailPeminjamanPage(
+                          data: {
+                            'id': item['bookingId'],
+                            'nama': item['peminjam'],
+                            'divisi': item['divisi'],
+                            'keperluan': item['keperluan'],
+                            'nomor': item['nomorSurat'],
+                            'alasan': item['alasan'],
+                            'tujuan': item['tujuan'],
+                            'kendaraan': item['kendaraan'],
+                            'platNomor': item['platNomor'],
+                            'tglPinjam': item['tglPinjam'],
+                            'jamPinjam': item['jamPinjam'],
+                            'tglKembali': item['tglKembali'],
+                            'jamKembali': item['jamKembali'],
+                            'status': item['status'],
+                            'waktuPinjam': item['waktuPinjam'],
+                            'waktuKembali': item['waktuKembali'],
+                          },
+                          approvalStep: _getApprovalStep(item['status']),
+                          isApprovalMode: canApprove || canReject,
+                          userName: widget.userName,
+                          userId: widget.userId,
+                          role: widget.role,
+                          userDivision: widget.userDivision,
                         ),
                       ),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      textStyle: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    );
+                    if (result == true) {
+                      await _loadBookings();
+                    }
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.blue.shade700,
+                    side: BorderSide(color: Colors.blue.shade700, width: 1.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.close_rounded,
-                          size: 18,
-                          color: Colors.red.shade700,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text('Batal'),
-                      ],
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.visibility_outlined,
+                        size: 16,
+                        color: Colors.blue.shade700,
+                      ),
+                      const SizedBox(width: 6),
+                      const Text('Lihat Detail'),
+                    ],
+                  ),
                 ),
-                
-                const SizedBox(width: 12),
-                
-                // Tombol Ya, Setujui (Hijau)
-                Expanded(
+              ),
+              
+              const SizedBox(height: 8),
+              
+              // Tombol Setujui (jika ada)
+              if (canApprove) ...[
+                SizedBox(
+                  width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
-                      // Update status menjadi Disetujui
-                      setState(() {
-                        item['status'] = 'Disetujui';
-                      });
-                      Navigator.pop(context);
-                      
-                      // Tampilkan snackbar konfirmasi
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Peminjaman ${item['id']} telah disetujui',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                            ),
-                          ),
-                          backgroundColor: Colors.green.shade600,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          duration: const Duration(seconds: 3),
-                        ),
-                      );
-                    },
+                    onPressed: () => _showApprovalConfirmationDialog(context, item),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green.shade600,
                       foregroundColor: Colors.white,
@@ -1112,9 +1524,9 @@ void _showApprovalConfirmationDialog(BuildContext context, Map<String, dynamic> 
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      textStyle: TextStyle(
-                        fontSize: 15,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      textStyle: const TextStyle(
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1123,23 +1535,550 @@ void _showApprovalConfirmationDialog(BuildContext context, Map<String, dynamic> 
                       children: [
                         Icon(
                           Icons.check_circle_outline_rounded,
-                          size: 18,
+                          size: 16,
                           color: Colors.white,
                         ),
-                        const SizedBox(width: 8),
-                        const Text('Ya, Setujui'),
+                        const SizedBox(width: 6),
+                        const Text('Setujui'),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              
+              // Tombol Tolak (jika ada)
+              if (canReject) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => _showRejectDialog(context, item),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade600,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      textStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.close_rounded,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 6),
+                        const Text('Tolak'),
                       ],
                     ),
                   ),
                 ),
               ],
-            ),
-          ],
+            ],
+          );
+        }
+        
+        // Jika lebar cukup, gunakan layout horizontal
+        else {
+          return Row(
+            children: [
+              // Tombol Lihat Detail
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DetailPeminjamanPage(
+                          data: {
+                            'id': item['bookingId'],
+                            'nama': item['peminjam'],
+                            'divisi': item['divisi'],
+                            'keperluan': item['keperluan'],
+                            'nomor': item['nomorSurat'],
+                            'alasan': item['alasan'],
+                            'tujuan': item['tujuan'],
+                            'kendaraan': item['kendaraan'],
+                            'platNomor': item['platNomor'],
+                            'tglPinjam': item['tglPinjam'],
+                            'jamPinjam': item['jamPinjam'],
+                            'tglKembali': item['tglKembali'],
+                            'jamKembali': item['jamKembali'],
+                            'status': item['status'],
+                            'waktuPinjam': item['waktuPinjam'],
+                            'waktuKembali': item['waktuKembali'],
+                          },
+                          approvalStep: _getApprovalStep(item['status']),
+                          isApprovalMode: canApprove || canReject,
+                          userName: widget.userName,
+                          userId: widget.userId,
+                          role: widget.role,
+                          userDivision: widget.userDivision,
+                        ),
+                      ),
+                    );
+                    if (result == true) {
+                      await _loadBookings();
+                    }
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.blue.shade700,
+                    side: BorderSide(color: Colors.blue.shade700, width: 1.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    textStyle: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.visibility_outlined,
+                        size: 14,
+                        color: Colors.blue.shade700,
+                      ),
+                      const SizedBox(width: 4),
+                      const Flexible(
+                        child: Text(
+                          'Lihat Detail',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              if (canApprove) ...[
+                const SizedBox(width: 6),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _showApprovalConfirmationDialog(context, item),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade600,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      textStyle: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.check_circle_outline_rounded,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 4),
+                        const Flexible(
+                          child: Text(
+                            'Setujui',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              
+              if (canReject) ...[
+                const SizedBox(width: 6),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _showRejectDialog(context, item),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade600,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      textStyle: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.close_rounded,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 4),
+                        const Flexible(
+                          child: Text(
+                            'Tolak',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          );
+        }
+      },
+    );
+  }
+
+  int _getApprovalStep(String status) {
+    switch (status) {
+      case 'SUBMITTED':
+        return 0;
+      case 'APPROVAL_1':
+        return 1;
+      case 'APPROVAL_2':
+        return 2;
+      case 'APPROVAL_3':
+        return 3;
+      case 'ON_GOING':
+        return 5;
+      case 'DONE':
+        return 6;
+      default:
+        return 0;
+    }
+  }
+
+  void _showApprovalConfirmationDialog(BuildContext context, Map<String, dynamic> item) {
+    String approvalText = '';
+    
+    // ✅ Cek apakah Manager Divisi
+    final isManagerDivisi = (_userJabatan ?? '').toLowerCase().contains('manager');
+    
+    if (widget.role == 'user' && isManagerDivisi) {
+      approvalText = 'menyetujui sebagai Manager Divisi';
+    } else if (widget.role == 'operator') {
+      approvalText = 'memverifikasi sebagai Operator';
+    } else if (widget.role == 'admin' || widget.role == 'manager_umum') {
+      approvalText = 'menyetujui sebagai Manager Umum';
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon Konfirmasi
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.check_circle_outline_rounded,
+                  size: 28,
+                  color: Colors.green.shade700,
+                ),
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Judul Dialog
+              Text(
+                'Konfirmasi Approval',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade900,
+                ),
+              ),
+              
+              const SizedBox(height: 8),
+              
+              // Pesan Konfirmasi
+              Text(
+                'Apakah Anda yakin ingin $approvalText?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade700,
+                  height: 1.4,
+                ),
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // Tombol Aksi
+              Row(
+                children: [
+                  // Tombol Batal
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade50,
+                        foregroundColor: Colors.red.shade700,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: Colors.red.shade200,
+                            width: 1.5,
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        textStyle: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.close_rounded,
+                            size: 16,
+                            color: Colors.red.shade700,
+                          ),
+                          const SizedBox(width: 6),
+                          const Text('Batal'),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(width: 8),
+                  
+                  // Tombol Ya, Setujui
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await _approveBooking(item);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade600,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        textStyle: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.check_circle_outline_rounded,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 6),
+                          const Text('Ya, Setujui'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
+
+  void _showRejectDialog(BuildContext context, Map<String, dynamic> item) {
+    final TextEditingController reasonController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon Konfirmasi
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.warning_amber_rounded,
+                  size: 28,
+                  color: Colors.red.shade700,
+                ),
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Judul Dialog
+              Text(
+                'Tolak Peminjaman',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade900,
+                ),
+              ),
+              
+              const SizedBox(height: 8),
+              
+              // Pesan Konfirmasi
+              Text(
+                'Masukkan alasan penolakan:',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              
+              const SizedBox(height: 12),
+              
+              // Input Alasan
+              TextFormField(
+                controller: reasonController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  hintText: 'Contoh: Kendaraan tidak tersedia, jadwal bentrok, dll.',
+                  hintStyle: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // Tombol Aksi
+              Row(
+                children: [
+                  // Tombol Batal
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey.shade100,
+                        foregroundColor: Colors.grey.shade700,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        textStyle: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.close_rounded,
+                            size: 16,
+                            color: Colors.grey.shade700,
+                          ),
+                          const SizedBox(width: 6),
+                          const Text('Batal'),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(width: 8),
+                  
+                  // Tombol Ya, Tolak
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        if (reasonController.text.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Harap masukkan alasan penolakan'),
+                              backgroundColor: Colors.red.shade600,
+                            ),
+                          );
+                          return;
+                        }
+                        
+                        Navigator.pop(context);
+                        await _rejectBooking(item, reasonController.text);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade600,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        textStyle: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.close_rounded,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 6),
+                          const Text('Ya, Tolak'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildDetailRow({
     required IconData icon,
@@ -1150,10 +2089,10 @@ void _showApprovalConfirmationDialog(BuildContext context, Map<String, dynamic> 
       children: [
         Icon(
           icon,
-          size: 18,
+          size: 16,
           color: Colors.grey.shade500,
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1161,7 +2100,7 @@ void _showApprovalConfirmationDialog(BuildContext context, Map<String, dynamic> 
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   color: Colors.grey.shade600,
                 ),
               ),
@@ -1169,49 +2108,17 @@ void _showApprovalConfirmationDialog(BuildContext context, Map<String, dynamic> 
               Text(
                 value,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w500,
                   color: Colors.grey.shade900,
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
               ),
             ],
           ),
         ),
       ],
     );
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Permohonan Approval':
-        return Colors.orange;
-      case 'Permohonan Pembatalan':
-        return Colors.blue;
-      case 'Disetujui':
-        return Colors.green;
-      case 'Ditolak':
-        return Colors.red;
-      case 'Dibatalkan':
-        return Colors.grey;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  IconData _getStatusIcon(String status) {
-    switch (status) {
-      case 'Permohonan Approval':
-        return Icons.access_time_rounded;
-      case 'Permohonan Pembatalan':
-        return Icons.cancel_presentation_rounded;
-      case 'Disetujui':
-        return Icons.check_circle_rounded;
-      case 'Ditolak':
-        return Icons.cancel_rounded;
-      case 'Dibatalkan':
-        return Icons.block_rounded;
-      default:
-        return Icons.info_rounded;
-    }
   }
 }

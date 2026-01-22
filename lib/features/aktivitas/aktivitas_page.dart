@@ -1,71 +1,128 @@
 import 'package:flutter/material.dart';
 import '../vehicle/detail_peminjaman_page.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class AktivitasPage extends StatefulWidget {
-  const AktivitasPage({super.key});
+  final String role;
+  final String userName;
+  final String userId;
+  final String userDivision;
+
+  const AktivitasPage({
+    super.key,
+    required this.role,
+    required this.userName,
+    required this.userId,
+    required this.userDivision,
+  });
 
   @override
   State<AktivitasPage> createState() => _AktivitasPageState();
 }
 
+
 class _AktivitasPageState extends State<AktivitasPage> {
   bool showOnGoing = true;
+  bool _isLoading = false;
+  List<Map<String, dynamic>> _onGoingList = [];
+  List<Map<String, dynamic>> _historyList = [];
+  
+  // Hapus semua dummy data onGoingList dan historyList yang lama
 
-  // Dummy data sementara (nanti ganti dari Firestore)
-  final List<Map<String, dynamic>> onGoingList = [
-    {
-      'title': 'Peminjaman Mobil 20 Januari 2025',
-      'kendaraan': 'Xenia Hitam',
-      'kegiatan': 'SPPD',
-      'tujuan': 'Semarang, Jawa Tengah',
-      'kondisi': 'Baik',
-      'status': 'On Going',
-      'tanggal': '20 Jan 2025',
-      'jam': '08:30 - 17:00',
+    @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+    Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    await Future.wait([
+      _fetchOnGoingBookings(),
+      _fetchHistoryBookings(),
+    ]);
+    setState(() => _isLoading = false);
+  }
+
+    Future<void> _fetchOnGoingBookings() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .where('peminjamId', isEqualTo: widget.userId)
+          .where('status', isEqualTo: 'ON_GOING')
+          .orderBy('waktuPinjam', descending: true)
+          .get();
+
+      _onGoingList = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          ...data,
+        };
+      }).toList();
+      
+      print('Found ${_onGoingList.length} ongoing bookings');
+    } catch (e) {
+      print('Error fetching ongoing bookings: $e');
+      _onGoingList = [];
     }
-  ];
+  }
 
-  final List<Map<String, dynamic>> historyList = [
-    {
-      'title': 'Peminjaman Mobil 20 Januari 2025',
-      'kendaraan': 'Xenia Hitam',
-      'kegiatan': 'SPPD',
-      'tujuan': 'Semarang, Jawa Tengah',
-      'kondisi': 'Baik',
-      'status': 'Selesai',
-      'tanggal': '20 Jan 2025',
-      'jam': '08:30 - 17:00',
-    },
-    {
-      'title': 'Peminjaman Mobil 12 Januari 2025',
-      'kendaraan': 'Innova Putih',
-      'kegiatan': 'Rapat',
-      'tujuan': 'Jakarta',
-      'kondisi': 'Baik',
-      'status': 'Selesai',
-      'tanggal': '12 Jan 2025',
-      'jam': '10:00 - 15:30',
-    },
-    {
-      'title': 'Peminjaman Mobil 5 Januari 2025',
-      'kendaraan': 'Avanza Abu',
-      'kegiatan': 'Undangan',
-      'tujuan': 'Bandung',
-      'kondisi': 'Baik',
-      'status': 'Selesai',
-      'tanggal': '5 Jan 2025',
-      'jam': '09:00 - 16:00',
-    },
-  ];
+    Future<void> _fetchHistoryBookings() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('vehicle_bookings')
+          .where('peminjamId', isEqualTo: widget.userId)
+          .where('status', whereIn: ['DONE', 'CANCELLED'])
+          .orderBy('updatedAt', descending: true)
+          .limit(20)
+          .get();
+
+      _historyList = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          ...data,
+        };
+      }).toList();
+      
+      print('Found ${_historyList.length} history bookings');
+    } catch (e) {
+      print('Error fetching history bookings: $e');
+      _historyList = [];
+    }
+  }
+
+    String _formatDate(Timestamp? timestamp) {
+    if (timestamp == null) return '-';
+    final date = timestamp.toDate();
+    return DateFormat('dd MMM yyyy', 'id_ID').format(date);
+  }
+
+  String _formatTime(Timestamp? timestamp) {
+    if (timestamp == null) return '-';
+    final date = timestamp.toDate();
+    return DateFormat('HH:mm', 'id_ID').format(date);
+  }
+
+  String _getVehicleDisplay(Map<String, dynamic> item) {
+    final vehicle = item['vehicle'] as Map<String, dynamic>?;
+    if (vehicle == null) return 'Kendaraan tidak diketahui';
+    return '${vehicle['nama']} (${vehicle['platNomor']})';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final list = showOnGoing ? onGoingList : historyList;
+  final list = showOnGoing ? _onGoingList : _historyList;
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
+        child: RefreshIndicator(
+        onRefresh: _loadData,
         child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -205,7 +262,14 @@ class _AktivitasPageState extends State<AktivitasPage> {
               const SizedBox(height: 24),
 
               // List Aktivitas
-              if (list.isEmpty)
+              if (_isLoading)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else if (list.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
@@ -286,14 +350,65 @@ class _AktivitasPageState extends State<AktivitasPage> {
           ),
         ),
       ),
+      ),
     );
   }
 
-  Widget _buildAktivitasCard(Map<String, dynamic> item) {
-    final isOnGoing = item['status'] == 'On Going';
-    final statusColor = isOnGoing ? Colors.orange : Colors.green;
+Widget _buildAktivitasCard(Map<String, dynamic> item) {
+  final status = item['status'] ?? 'UNKNOWN';
+  final isOnGoing = status == 'ON_GOING';
+  final isDone = status == 'DONE';
+  final isCancelled = status == 'CANCELLED';
+  
+  Color statusColor;
+  if (isOnGoing) {
+    statusColor = Colors.orange;
+  } else if (isDone) {
+    statusColor = Colors.green;
+  } else if (isCancelled) {
+    statusColor = Colors.red;
+  } else {
+    statusColor = Colors.grey;
+  }
 
-    return Container(
+  final waktuPinjam = item['waktuPinjam'] as Timestamp?;
+  final waktuKembali = item['waktuKembali'] as Timestamp?;
+  final vehicleDisplay = _getVehicleDisplay(item);
+  final keperluan = item['keperluan'] ?? '-';
+  final tujuan = item['tujuan'] ?? '-';
+
+  String statusText;
+  if (isOnGoing) {
+    statusText = 'Sedang Digunakan';
+  } else if (isDone) {
+    statusText = 'Selesai';
+  } else if (isCancelled) {
+    statusText = 'Dibatalkan';
+  } else {
+    statusText = status;
+  }
+
+  return InkWell(
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DetailPeminjamanPage(
+            data: item,
+            approvalStep: 0,
+            role: widget.role,
+            userName: widget.userName,
+            userId: widget.userId,
+            userDivision: widget.userDivision,
+            isApprovalMode: false,
+          ),
+        ),
+      ).then((_) {
+        // Refresh data setelah kembali dari detail
+        _loadData();
+      });
+    },
+    child: Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -333,7 +448,7 @@ class _AktivitasPageState extends State<AktivitasPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item['title'],
+                      'Peminjaman ${_formatDate(waktuPinjam)}',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -342,7 +457,7 @@ class _AktivitasPageState extends State<AktivitasPage> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      item['tanggal'] + ' • ' + item['jam'],
+                      '${_formatTime(waktuPinjam)} - ${_formatTime(waktuKembali)}',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey.shade500,
@@ -351,25 +466,27 @@ class _AktivitasPageState extends State<AktivitasPage> {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: statusColor.shade50,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: statusColor.shade100),
-                ),
-                child: Text(
-                  item['status'],
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: statusColor.shade800,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: statusColor.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: statusColor.withOpacity(0.9),
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
 
@@ -381,25 +498,19 @@ class _AktivitasPageState extends State<AktivitasPage> {
               _buildDetailRow(
                 icon: Icons.car_repair_rounded,
                 label: 'Kendaraan',
-                value: item['kendaraan'],
+                value: vehicleDisplay,
               ),
               const SizedBox(height: 12),
               _buildDetailRow(
                 icon: Icons.assignment_rounded,
                 label: 'Kegiatan',
-                value: item['kegiatan'],
+                value: keperluan,
               ),
               const SizedBox(height: 12),
               _buildDetailRow(
                 icon: Icons.location_on_rounded,
                 label: 'Tujuan',
-                value: item['tujuan'],
-              ),
-              const SizedBox(height: 12),
-              _buildDetailRow(
-                icon: Icons.check_circle_outline_rounded,
-                label: 'Kondisi',
-                value: item['kondisi'],
+                value: tujuan,
               ),
             ],
           ),
@@ -417,24 +528,20 @@ class _AktivitasPageState extends State<AktivitasPage> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => DetailPeminjamanPage(
-                        data: {
-                          'id': 'PMJ-20250120-001',
-                          'nama': 'Budi Santoso',
-                          'nipp': '123456',
-                          'divisi': 'Operasional',
-                          'keperluan': 'SPPD',
-                          'tujuan': 'Semarang',
-                          'kendaraan': item['kendaraan'],
-                          'tglPinjam': item['tanggal'],
-                          'jamPinjam': '08:30',
-                          'tglKembali': item['tanggal'],
-                          'jamKembali': '17:00',
-                        },
-                        approvalStep: 3,
-                        isReturn: true, // mode pengembalian
+                        data: item,
+                        approvalStep: 0,
+                        role: widget.role,
+                        userName: widget.userName,
+                        userId: widget.userId,
+                        userDivision: widget.userDivision,
+                        isApprovalMode: false,
+                        isReturn: true,
                       ),
                     ),
-                  );
+                  ).then((_) {
+                    // Refresh data setelah kembali
+                    _loadData();
+                  });
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue.shade700,
@@ -447,10 +554,10 @@ class _AktivitasPageState extends State<AktivitasPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.check_circle_outline_rounded, size: 20),
+                    const Icon(Icons.info_outline_rounded, size: 20),
                     const SizedBox(width: 8),
                     const Text(
-                      'Akhiri Peminjaman',
+                      'Lihat Detail',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -463,8 +570,9 @@ class _AktivitasPageState extends State<AktivitasPage> {
           ],
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildDetailRow({
     required IconData icon,

@@ -17,17 +17,184 @@ class _LoginPageState extends State<LoginPage> {
   bool _isLoading = false;
   bool _obscurePassword = true;
 
+  // Simpan login info ke SharedPreferences jika rememberMe true
+  Future<void> _saveLoginInfo(String nipp, String password) async {
+    // TODO: Implementasi SharedPreferences jika diperlukan
+    // final prefs = await SharedPreferences.getInstance();
+    // if (_rememberMe) {
+    //   await prefs.setString('nipp', nipp);
+    //   await prefs.setString('password', password);
+    //   await prefs.setBool('rememberMe', true);
+    // } else {
+    //   await prefs.remove('nipp');
+    //   await prefs.remove('password');
+    //   await prefs.setBool('rememberMe', false);
+    // }
+  }
+
+  // Load saved login info jika rememberMe true
+  Future<void> _loadSavedLoginInfo() async {
+    // TODO: Implementasi SharedPreferences jika diperlukan
+    // final prefs = await SharedPreferences.getInstance();
+    // if (prefs.getBool('rememberMe') ?? false) {
+    //   final savedNipp = prefs.getString('nipp');
+    //   final savedPassword = prefs.getString('password');
+    //   if (savedNipp != null && savedPassword != null) {
+    //     _nippController.text = savedNipp;
+    //     _passwordController.text = savedPassword;
+    //     _rememberMe = true;
+    //   }
+    // }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedLoginInfo();
+  }
+
   Future<void> loginWithNipp() async {
-    setState(() => _isLoading = true);
+  setState(() => _isLoading = true);
+  
+  try {
+    final nipp = _nippController.text.trim();
+    final password = _passwordController.text.trim();
+
+    // Validasi input
+    if (nipp.isEmpty || password.isEmpty) {
+      throw 'NIPP dan Password wajib diisi';
+    }
+
+    // Simpan login info jika rememberMe dicentang
+    await _saveLoginInfo(nipp, password);
+
+    // 1. Cari user berdasarkan NIPP di Firestore
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .where('nipp', isEqualTo: nipp)
+        .limit(1)
+        .get();
+
+    if (snap.docs.isEmpty) {
+      throw 'NIPP tidak terdaftar';
+    }
+
+    final userDoc = snap.docs.first;
+    final userData = userDoc.data();
+    final email = userData['email'];
+    final role = userData['role'];
+    final userId = userDoc.id;
+    final userName = userData['nama'] ?? 'User';
+    final userDivision = userData['divisi'] ?? ''; // AMBIL DIVISI DI SINI
+
+    // 2. Verifikasi password (password harus sama dengan NIPP)
+    if (password != nipp) {
+      throw 'Password salah. Password harus sama dengan NIPP';
+    }
+
+    // 3. Login dengan Firebase Auth menggunakan email
+    await FirebaseAuth.instance.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+
+    if (!mounted) return;
+
+    // 4. Navigasi ke DashboardPage dengan SEMUA data yang diperlukan
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DashboardPage(
+          role: role,
+          userName: userName,
+          userId: userId,
+          userDivision: userDivision, // PASS DIVISI KE DASHBOARD
+        ),
+      ),
+    );
+
+    // 5. Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Login berhasil! Selamat datang, $userName'),
+        backgroundColor: Colors.green.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+
+  } on FirebaseAuthException catch (e) {
+    // Handle Firebase Auth errors
+    String errorMessage;
+    switch (e.code) {
+      case 'user-not-found':
+        errorMessage = 'Email tidak terdaftar di sistem autentikasi';
+        break;
+      case 'wrong-password':
+        errorMessage = 'Password salah';
+        break;
+      case 'too-many-requests':
+        errorMessage = 'Terlalu banyak percobaan. Coba lagi nanti';
+        break;
+      default:
+        errorMessage = 'Terjadi kesalahan autentikasi: ${e.message}';
+    }
+    _showErrorSnackbar(errorMessage);
     
+  } on FirebaseException catch (e) {
+    // Handle Firestore errors
+    _showErrorSnackbar('Terjadi kesalahan database: ${e.message}');
+    
+  } catch (e) {
+    // Handle other errors
+    _showErrorSnackbar(e.toString());
+    
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+}
+
+  // Helper untuk menampilkan error snackbar
+  void _showErrorSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
+  // Validasi NIPP format
+  bool _isValidNIPP(String nipp) {
+    // Cek apakah NIPP hanya berisi angka
+    final regex = RegExp(r'^[0-9]+$');
+    return regex.hasMatch(nipp);
+  }
+
+  // Handler untuk forgot password
+  Future<void> _handleForgotPassword() async {
+    final nipp = _nippController.text.trim();
+    
+    if (nipp.isEmpty) {
+      _showErrorSnackbar('Silakan masukkan NIPP terlebih dahulu');
+      return;
+    }
+
+    if (!_isValidNIPP(nipp)) {
+      _showErrorSnackbar('Format NIPP tidak valid');
+      return;
+    }
+
     try {
-      final nipp = _nippController.text.trim();
-      final password = _passwordController.text.trim();
-
-      if (nipp.isEmpty || password.isEmpty) {
-        throw 'NIPP dan Password wajib diisi';
-      }
-
+      // Cari user berdasarkan NIPP
       final snap = await FirebaseFirestore.instance
           .collection('users')
           .where('nipp', isEqualTo: nipp)
@@ -40,39 +207,32 @@ class _LoginPageState extends State<LoginPage> {
 
       final userData = snap.docs.first.data();
       final email = userData['email'];
-      final role = userData['role'];
 
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      // Kirim password reset email
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
 
+      // Tampilkan dialog konfirmasi
       if (!mounted) return;
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DashboardPage(
-              role: role,
-              userName: userData['nama'],
+      
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Reset Password Terkirim'),
+          content: Text(
+            'Link reset password telah dikirim ke email: $email\n\n'
+            'Silakan cek email Anda dan ikuti instruksi untuk reset password.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
             ),
-          ),
-        );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: Colors.red.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          ],
         ),
       );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+
+    } catch (e) {
+      _showErrorSnackbar('Gagal mengirim reset password: $e');
     }
   }
 
@@ -84,12 +244,13 @@ class _LoginPageState extends State<LoginPage> {
         child: SingleChildScrollView(
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              minHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.vertical,
+              minHeight: MediaQuery.of(context).size.height - 
+                         MediaQuery.of(context).padding.vertical,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Minimal
+                // Header dengan logo dan help
                 Padding(
                   padding: const EdgeInsets.all(24),
                   child: Row(
@@ -117,21 +278,22 @@ class _LoginPageState extends State<LoginPage> {
 
                 const SizedBox(height: 40),
 
-                // Logo Aplikasi
+                // Logo aplikasi
                 Center(
                   child: Column(
                     children: [
                       Image.asset(
                         'assets/images/logo-pintra.png',
-                        width: 260,
+                        width: 320,
                       ),
+                      const SizedBox(height: 8),
                     ],
                   ),
                 ),
 
                 const SizedBox(height: 48),
 
-                // Form Login
+                // Form login
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: Column(
@@ -150,6 +312,14 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           floatingLabelStyle: TextStyle(
                             color: Colors.blue.shade700,
+                          ),
+                          hintText: 'Masukkan NIPP Anda',
+                          hintStyle: TextStyle(
+                            color: Colors.grey.shade500,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.badge_outlined,
+                            color: Colors.grey.shade500,
                           ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -175,6 +345,13 @@ class _LoginPageState extends State<LoginPage> {
                             vertical: 18,
                           ),
                         ),
+                        keyboardType: TextInputType.number,
+                        onChanged: (value) {
+                          // Validasi real-time: hanya angka
+                          if (value.isNotEmpty && !_isValidNIPP(value)) {
+                            // Bisa tambahkan visual feedback di sini
+                          }
+                        },
                       ),
 
                       const SizedBox(height: 24),
@@ -194,6 +371,14 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           floatingLabelStyle: TextStyle(
                             color: Colors.blue.shade700,
+                          ),
+                          hintText: 'Masukkan password (sama dengan NIPP)',
+                          hintStyle: TextStyle(
+                            color: Colors.grey.shade500,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.lock_outline,
+                            color: Colors.grey.shade500,
                           ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -231,6 +416,12 @@ class _LoginPageState extends State<LoginPage> {
                             vertical: 18,
                           ),
                         ),
+                        keyboardType: TextInputType.number,
+                        onFieldSubmitted: (_) {
+                          if (!_isLoading) {
+                            loginWithNipp();
+                          }
+                        },
                       ),
 
                       const SizedBox(height: 16),
@@ -245,8 +436,13 @@ class _LoginPageState extends State<LoginPage> {
                                 scale: 0.9,
                                 child: Checkbox(
                                   value: _rememberMe,
-                                  onChanged: (v) =>
-                                      setState(() => _rememberMe = v!),
+                                  onChanged: (v) {
+                                    setState(() => _rememberMe = v!);
+                                    if (!v!) {
+                                      // Jika rememberMe di-uncheck, hapus saved login info
+                                      _saveLoginInfo('', '');
+                                    }
+                                  },
                                   activeColor: Colors.blue.shade700,
                                   materialTapTargetSize:
                                       MaterialTapTargetSize.shrinkWrap,
@@ -263,9 +459,7 @@ class _LoginPageState extends State<LoginPage> {
                             ],
                           ),
                           TextButton(
-                            onPressed: () {
-                              Navigator.pushNamed(context, '/forgot-password');
-                            },
+                            onPressed: _isLoading ? null : _handleForgotPassword,
                             child: Text(
                               'Lupa password?',
                               style: TextStyle(
@@ -305,22 +499,64 @@ class _LoginPageState extends State<LoginPage> {
                                     ),
                                   ),
                                 )
-                              : Text(
-                                  'Masuk',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              : const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.login, size: 20),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Masuk',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Informasi login
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.blue.shade100,
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: Colors.blue.shade700,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Password sama dengan NIPP Anda. Untuk pertama kali login, gunakan NIPP sebagai password.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blue.shade800,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(),
+                const SizedBox(height: 32),
 
-                // Footer Minimal
+                // Footer
                 Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
@@ -331,9 +567,18 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        '© 2024 Pelindo System',
+                        'Sistem Peminjaman Kendaraan Operasional',
                         style: TextStyle(
                           fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '© 2024 PT Pelabuhan Indonesia (Persero)',
+                        style: TextStyle(
+                          fontSize: 12,
                           color: Colors.grey.shade500,
                         ),
                       ),
@@ -341,7 +586,7 @@ class _LoginPageState extends State<LoginPage> {
                       Text(
                         'Versi 1.0.0',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           color: Colors.grey.shade400,
                         ),
                       ),
@@ -354,5 +599,12 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _nippController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }
