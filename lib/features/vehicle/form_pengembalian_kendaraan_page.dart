@@ -1,40 +1,43 @@
 import 'package:flutter/material.dart';
-import '../dashboard/dashboard_page.dart';
+import '../vehicle/berhasil_pengembalian_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
+import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
 
-class FormKondisiKendaraanAwalPage extends StatefulWidget {
+
+class FormPengembalianKendaraanPage extends StatefulWidget {
   final String role;
   final String userName;
   final String userId;
-  final String bookingId;           
-  final String vehicleId;           
+  final String bookingId;
+  final String vehicleId;
   final Map<String, dynamic>? vehicleData;
-  final String userDivision;
+  final Map<String, dynamic> bookingData;
 
-  const FormKondisiKendaraanAwalPage({
+  const FormPengembalianKendaraanPage({
     super.key,
     required this.role,
     required this.userName,
     required this.userId,
-    required this.bookingId,        
-    required this.vehicleId,        
+    required this.bookingId,
+    required this.vehicleId,
     this.vehicleData,
-    required this.userDivision,               
+    required this.bookingData,
   });
 
   @override
-  State<FormKondisiKendaraanAwalPage> createState() =>
-      _FormKondisiKendaraanAwalPageState();
+  State<FormPengembalianKendaraanPage> createState() =>
+      _FormPengembalianKendaraanPageState();
 }
 
-class _FormKondisiKendaraanAwalPageState
-    extends State<FormKondisiKendaraanAwalPage> {
+class _FormPengembalianKendaraanPageState
+    extends State<FormPengembalianKendaraanPage> {
   String? kondisi;
   String? kelengkapan;
+  String? sisaBBM;
+
   bool p3k = true;
   bool dongkrak = true;
   bool segitiga = true;
@@ -47,9 +50,6 @@ class _FormKondisiKendaraanAwalPageState
 
   bool _isUploading = false;
   bool _hasPhoto = false;
-  File? _photoFile;
-  String? _photoBase64; // ✅ Ganti dari _photoUrl ke _photoBase64
-  bool _isSaving = false;
 
   // Fungsi untuk menghitung persentase kelengkapan
   double _calculateCompleteness() {
@@ -59,7 +59,8 @@ class _FormKondisiKendaraanAwalPageState
   }
 
   // Widget untuk checklist item yang konsisten
-  Widget _buildChecklistItem(String label, bool value, Function(bool?) onChanged) {
+  Widget _buildChecklistItem(
+      String label, bool value, Function(bool?) onChanged) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -93,7 +94,8 @@ class _FormKondisiKendaraanAwalPageState
                     color: value ? Colors.blue.shade50 : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
-                      color: value ? Colors.blue.shade700 : Colors.grey.shade300,
+                      color:
+                          value ? Colors.blue.shade700 : Colors.grey.shade300,
                       width: value ? 2 : 1,
                     ),
                   ),
@@ -131,37 +133,44 @@ class _FormKondisiKendaraanAwalPageState
     );
   }
 
+  bool _isSaving = false;
+
   Future<void> _simpanForm() async {
-    // ========== VALIDASI FORM ==========
+    // Validasi form
     if (kondisi == null) {
-      _showSnackBar('Pilih kondisi kendaraan');
+      _showSnackBar('Pilih kondisi kendaraan saat pengembalian');
       return;
     }
 
     if (kondisi == 'Tidak Baik' && uraianKondisiController.text.isEmpty) {
-      _showSnackBar('Uraikan kondisi tidak baik');
+      _showSnackBar('Uraikan kondisi kendaraan saat pengembalian');
       return;
     }
 
     if (kelengkapan == null) {
-      _showSnackBar('Pilih kelengkapan kendaraan');
+      _showSnackBar('Pilih kelengkapan kendaraan saat pengembalian');
       return;
     }
 
     if (kelengkapan == 'Tidak Lengkap') {
       if (p3k && dongkrak && segitiga) {
-        _showSnackBar('Pilih kelengkapan yang tidak tersedia');
+        _showSnackBar('Pilih kelengkapan yang masih ada saat pengembalian');
         return;
       }
 
       if (uraianKelengkapanController.text.isEmpty) {
-        _showSnackBar('Uraikan kronologi kehilangan kelengkapan');
+        _showSnackBar('Uraikan kronologi kehilangan kelengkapan saat pengembalian');
         return;
       }
     }
 
+    if (sisaBBM == null) {
+      _showSnackBar('Pilih sisa BBM kendaraan saat pengembalian');
+      return;
+    }
+
     if (odoController.text.isEmpty) {
-      _showSnackBar('Masukkan odometer awal');
+      _showSnackBar('Masukkan odometer akhir');
       return;
     }
 
@@ -171,7 +180,7 @@ class _FormKondisiKendaraanAwalPageState
       return;
     }
 
-    // ========== MULAI PROSES SIMPAN ==========
+    // ✅ MULAI PROSES SIMPAN
     setState(() => _isSaving = true);
 
     try {
@@ -186,12 +195,12 @@ class _FormKondisiKendaraanAwalPageState
       }
 
       final currentStatus = bookingDoc.data()?['status'];
-      if (currentStatus != 'APPROVAL_3') {
-        throw Exception('Peminjaman tidak dalam status yang tepat untuk pengambilan kendaraan. Status saat ini: $currentStatus');
+      if (currentStatus != 'ON_GOING') {
+        throw Exception('Peminjaman tidak dalam status ON_GOING');
       }
 
-      // 2️⃣ SIAPKAN DATA KONDISI AWAL
-      Map<String, dynamic> kondisiAwalData = {
+      // 2️⃣ SIAPKAN DATA KONDISI AKHIR
+      Map<String, dynamic> kondisiAkhirData = {
         'kondisi': kondisi,
         'kelengkapan': kelengkapan,
         'kelengkapanItems': {
@@ -199,7 +208,8 @@ class _FormKondisiKendaraanAwalPageState
           'dongkrak': dongkrak,
           'segitiga': segitiga,
         },
-        'odometerAwal': odometerValue,
+        'sisaBBM': sisaBBM,
+        'odometerAkhir': odometerValue,
         'timestamp': Timestamp.now(),
         'filledBy': widget.userId,
         'filledByName': widget.userName,
@@ -207,18 +217,18 @@ class _FormKondisiKendaraanAwalPageState
 
       // Tambahkan uraian jika kondisi tidak baik
       if (kondisi == 'Tidak Baik' && uraianKondisiController.text.isNotEmpty) {
-        kondisiAwalData['uraianKondisi'] = uraianKondisiController.text;
+        kondisiAkhirData['uraianKondisi'] = uraianKondisiController.text;
       }
 
       // Tambahkan uraian jika kelengkapan tidak lengkap
       if (kelengkapan == 'Tidak Lengkap' && uraianKelengkapanController.text.isNotEmpty) {
-        kondisiAwalData['uraianKelengkapan'] = uraianKelengkapanController.text;
+        kondisiAkhirData['uraianKelengkapan'] = uraianKelengkapanController.text;
       }
 
       // Tambahkan foto sebagai base64 jika ada
       if (_photoBase64 != null && _photoBase64!.isNotEmpty) {
-        kondisiAwalData['fotoBase64'] = _photoBase64;
-        kondisiAwalData['fotoTimestamp'] = Timestamp.now();
+        kondisiAkhirData['fotoBase64'] = _photoBase64;
+        kondisiAkhirData['fotoTimestamp'] = Timestamp.now();
       }
 
       // 3️⃣ UPDATE DOCUMENT VEHICLE_BOOKINGS
@@ -226,13 +236,13 @@ class _FormKondisiKendaraanAwalPageState
           .collection('vehicle_bookings')
           .doc(widget.bookingId)
           .update({
-        'kondisiAwal': kondisiAwalData,
-        'status': 'ON_GOING',
-        'actualPickupTime': Timestamp.now(),
+        'kondisiAkhir': kondisiAkhirData,
+        'status': 'DONE',
+        'actualReturnTime': Timestamp.now(),
         'updatedAt': Timestamp.now(),
       });
 
-      print('✅ Booking updated to ON_GOING');
+      print('✅ Booking updated to DONE');
 
       // 4️⃣ UPDATE ODOMETER DI COLLECTION VEHICLES
       await FirebaseFirestore.instance
@@ -245,53 +255,30 @@ class _FormKondisiKendaraanAwalPageState
 
       print('✅ Vehicle odometer updated');
 
+      // 5️⃣ TAMBAHKAN LOG DI APPROVAL_HISTORY
       await FirebaseFirestore.instance
           .collection('vehicle_bookings')
           .doc(widget.bookingId)
           .collection('approval_history')
           .add({
-        'action': 'VEHICLE_PICKED_UP',
-        'oldStatus': 'APPROVAL_3',
-        'newStatus': 'ON_GOING',
-        'status': 'ON_GOING', // ✅ TAMBAHKAN INI - Penting untuk timeline
+        'action': 'VEHICLE_RETURNED',
+        'oldStatus': 'ON_GOING',
+        'newStatus': 'DONE',
+        'status': 'DONE', // ✅ TAMBAHKAN INI - Penting untuk timeline
         'actionBy': widget.userName,
         'actionRole': widget.role, // ✅ Tambahkan role
         'userId': widget.userId,
         'timestamp': Timestamp.now(),
-        'note': 'Kendaraan telah diambil dan kondisi awal telah dicatat oleh ${widget.userName}',
-        'odometerAwal': odometerValue,
+        'note': 'Kendaraan telah dikembalikan dan kondisi akhir telah dicatat oleh ${widget.userName}',
+        'odometerAkhir': odometerValue,
       });
-
       print('✅ Approval history added');
 
       setState(() => _isSaving = false);
 
       if (mounted) {
-        // 6️⃣ TAMPILKAN PESAN SUKSES
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Kondisi kendaraan berhasil dicatat'),
-            backgroundColor: Colors.green.shade600,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-
-        // 7️⃣ NAVIGATE KE DASHBOARD TAB AKTIVITAS
-        await Future.delayed(const Duration(milliseconds: 500));
-        
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DashboardPage(
-              role: widget.role,
-              userName: widget.userName,
-              userId: widget.userId,
-              userDivision: widget.userDivision,
-            ),
-          ),
-          (route) => false,
-        );
+        // 6️⃣ NAVIGASI KE HALAMAN BERHASIL
+        _showSuccessDialog();
       }
     } catch (e) {
       setState(() => _isSaving = false);
@@ -302,7 +289,6 @@ class _FormKondisiKendaraanAwalPageState
       }
     }
   }
-
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -317,87 +303,97 @@ class _FormKondisiKendaraanAwalPageState
     );
   }
 
-  Future<void> _uploadFoto() async {
-    try {
-      final ImagePicker picker = ImagePicker();
-      
-      // Tampilkan pilihan: Kamera atau Galeri
-      final ImageSource? source = await showDialog<ImageSource>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Pilih Sumber Foto'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.camera_alt),
-                title: const Text('Kamera'),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Galeri'),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
-              ),
-            ],
-          ),
+void _showSuccessDialog() {
+  if (mounted) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BerhasilPengembalianPage(
+          bookingId: widget.bookingId, // ✅ Cukup kirim ID saja
         ),
-      );
+      ),
+    );
+  }
+}
 
-      if (source == null) return;
+File? _photoFile;
+String? _photoBase64;
 
-      final XFile? image = await picker.pickImage(
-        source: source,
-        maxWidth: 1024, // Resize otomatis
-        maxHeight: 1024,
-        imageQuality: 70, // Kompresi 70%
-      );
+Future<void> _uploadFoto() async {
+  try {
+    final ImagePicker picker = ImagePicker();
+    
+    // Tampilkan pilihan: Kamera atau Galeri
+    final ImageSource? source = await showDialog<ImageSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pilih Sumber Foto'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Kamera'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Galeri'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
 
-      if (image != null) {
-        setState(() => _isUploading = true);
+    if (source == null) return;
 
-        // Baca file sebagai bytes
-        final bytes = await File(image.path).readAsBytes();
-        
-        // Convert ke base64
-        final base64String = base64Encode(bytes);
-        
-        // Cek ukuran (jangan lebih dari 800KB untuk safety)
-        final sizeInKB = base64String.length * 0.75 / 1024;
-        
-        if (sizeInKB > 800) {
-          if (mounted) {
-            _showSnackBar('Foto terlalu besar (${sizeInKB.toStringAsFixed(0)}KB). Maksimal 800KB');
-          }
-          setState(() => _isUploading = false);
-          return;
+    final XFile? image = await picker.pickImage(
+      source: source,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 70,
+    );
+
+    if (image != null) {
+      setState(() => _isUploading = true);
+
+      final bytes = await File(image.path).readAsBytes();
+      final base64String = base64Encode(bytes);
+      
+      final sizeInKB = base64String.length * 0.75 / 1024;
+      
+      if (sizeInKB > 800) {
+        if (mounted) {
+          _showSnackBar('Foto terlalu besar (${sizeInKB.toStringAsFixed(0)}KB). Maksimal 800KB');
         }
+        setState(() => _isUploading = false);
+        return;
+      }
 
-        setState(() {
-          _photoFile = File(image.path);
-          _photoBase64 = base64String;
-          _hasPhoto = true;
-          _isUploading = false;
-        });
-        
-        print('Foto berhasil dipilih. Size: ${sizeInKB.toStringAsFixed(2)} KB');
-      }
-    } catch (e) {
-      print('Error picking image: $e');
-      setState(() => _isUploading = false);
-      if (mounted) {
-        _showSnackBar('Gagal mengambil foto');
-      }
+      setState(() {
+        _photoFile = File(image.path);
+        _photoBase64 = base64String;
+        _hasPhoto = true;
+        _isUploading = false;
+      });
+    }
+  } catch (e) {
+    print('Error picking image: $e');
+    setState(() => _isUploading = false);
+    if (mounted) {
+      _showSnackBar('Gagal mengambil foto');
     }
   }
+}
 
-  void _hapusFoto() {
-    setState(() {
-      _hasPhoto = false;
-      _photoFile = null;
-      _photoBase64 = null;
-    });
-  }
+void _hapusFoto() {
+  setState(() {
+    _hasPhoto = false;
+    _photoFile = null;
+    _photoBase64 = null;
+  });
+}
 
   @override
   Widget build(BuildContext context) {
@@ -415,7 +411,7 @@ class _FormKondisiKendaraanAwalPageState
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Kondisi Kendaraan Awal',
+          'Pengembalian Kendaraan',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -448,7 +444,7 @@ class _FormKondisiKendaraanAwalPageState
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Isi form dengan teliti. Data ini akan menjadi acuan saat pengembalian kendaraan.',
+                        'Pastikan kondisi kendaraan sesuai dengan saat peminjaman. Data ini akan menjadi acuan untuk peminjaman berikutnya.',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.blue.shade800,
@@ -461,9 +457,9 @@ class _FormKondisiKendaraanAwalPageState
 
               const SizedBox(height: 32),
 
-              // Kondisi Peminjaman Kendaraan
+              // Kondisi Kendaraan Saat Pengembalian
               Text(
-                'Kondisi Kendaraan',
+                'Kondisi Kendaraan Saat Pengembalian',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -472,7 +468,7 @@ class _FormKondisiKendaraanAwalPageState
               ),
               const SizedBox(height: 12),
               Text(
-                'Bagaimana kondisi kendaraan saat ini?',
+                'Bagaimana kondisi kendaraan saat dikembalikan?',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
@@ -541,7 +537,7 @@ class _FormKondisiKendaraanAwalPageState
                   controller: uraianKondisiController,
                   maxLines: 3,
                   decoration: InputDecoration(
-                    hintText: 'Uraikan kondisi terkini kendaraan...',
+                    hintText: 'Uraikan kondisi kendaraan saat dikembalikan...',
                     hintStyle: TextStyle(
                       color: Colors.grey.shade500,
                     ),
@@ -575,7 +571,7 @@ class _FormKondisiKendaraanAwalPageState
 
               // Upload Foto
               Text(
-                'Foto Kendaraan',
+                'Foto Kendaraan Saat Pengembalian',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -584,7 +580,7 @@ class _FormKondisiKendaraanAwalPageState
               ),
               const SizedBox(height: 8),
               Text(
-                'Unggah foto kondisi kendaraan saat ini',
+                'Unggah foto kondisi kendaraan saat dikembalikan',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
@@ -621,7 +617,7 @@ class _FormKondisiKendaraanAwalPageState
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  'kendaraan_awal.jpg',
+                                  'kendaraan_pengembalian.jpg',
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: Colors.grey.shade600,
@@ -699,9 +695,9 @@ class _FormKondisiKendaraanAwalPageState
 
               const SizedBox(height: 32),
 
-              // Kelengkapan Peminjaman Kendaraan
+              // Kelengkapan Kendaraan Saat Pengembalian
               Text(
-                'Kelengkapan Kendaraan',
+                'Kelengkapan Kendaraan Saat Pengembalian',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -710,7 +706,7 @@ class _FormKondisiKendaraanAwalPageState
               ),
               const SizedBox(height: 12),
               Text(
-                'Apakah kelengkapan kendaraan lengkap?',
+                'Apakah kelengkapan kendaraan lengkap saat dikembalikan?',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
@@ -815,7 +811,7 @@ class _FormKondisiKendaraanAwalPageState
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  'Centang item yang masih tersedia',
+                                  'Centang item yang masih tersedia saat pengembalian',
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: Colors.grey.shade600,
@@ -964,7 +960,7 @@ class _FormKondisiKendaraanAwalPageState
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  'Jelaskan kronologi kehilangan kelengkapan',
+                                  'Jelaskan kronologi kehilangan kelengkapan saat pengembalian',
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: Colors.grey.shade600,
@@ -982,7 +978,7 @@ class _FormKondisiKendaraanAwalPageState
                         controller: uraianKelengkapanController,
                         maxLines: 4,
                         decoration: InputDecoration(
-                          hintText: 'Contoh: Segitiga darurat hilang sejak peminjaman terakhir pada 15 Januari 2024...',
+                          hintText: 'Contoh: Segitiga darurat hilang saat perjalanan menuju tujuan...',
                           hintStyle: TextStyle(
                             color: Colors.grey.shade500,
                             fontSize: 14,
@@ -1018,9 +1014,9 @@ class _FormKondisiKendaraanAwalPageState
 
               const SizedBox(height: 24),
 
-              // Odometer Awal
+              // Sisa BBM
               Text(
-                'Odometer Awal',
+                'Sisa BBM Saat Pengembalian',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -1029,7 +1025,82 @@ class _FormKondisiKendaraanAwalPageState
               ),
               const SizedBox(height: 8),
               Text(
-                'Masukkan angka odometer saat ini',
+                'Pilih perkiraan sisa bahan bakar kendaraan',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: sisaBBM,
+                items: const [
+                  DropdownMenuItem(
+                    value: '0-25%',
+                    child: Text('0-25% (Hampir Habis)'),
+                  ),
+                  DropdownMenuItem(
+                    value: '25-50%',
+                    child: Text('25-50% (Kurang dari Setengah)'),
+                  ),
+                  DropdownMenuItem(
+                    value: '50-75%',
+                    child: Text('50-75% (Lebih dari Setengah)'),
+                  ),
+                  DropdownMenuItem(
+                    value: '75-100%',
+                    child: Text('75-100% (Hampir Penuh)'),
+                  ),
+                ],
+                onChanged: (v) => setState(() => sisaBBM = v),
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Colors.blue.shade700,
+                      width: 2,
+                    ),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
+                  ),
+                ),
+                borderRadius: BorderRadius.circular(12),
+                icon: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Colors.grey.shade500,
+                ),
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.grey.shade900,
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Odometer Akhir
+              Text(
+                'Odometer Akhir',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Masukkan angka odometer saat pengembalian',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
@@ -1044,7 +1115,7 @@ class _FormKondisiKendaraanAwalPageState
                     Icons.speed_rounded,
                     color: Colors.grey.shade500,
                   ),
-                  hintText: 'Contoh: 12345',
+                  hintText: 'Contoh: 45678',
                   hintStyle: TextStyle(
                     color: Colors.grey.shade500,
                   ),
@@ -1079,51 +1150,51 @@ class _FormKondisiKendaraanAwalPageState
               const SizedBox(height: 40),
 
               // Tombol Simpan
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: _isSaving ? null : _simpanForm, // ✅ Disable saat saving
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _isSaving ? Colors.grey.shade400 : Colors.blue.shade700, // ✅ Ubah warna
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: _isSaving
-                          ? Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: const [
-                                SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                  ),
-                                ),
-                                SizedBox(width: 12),
-                                Text(
-                                  'Menyimpan...',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            )
-                          : const Text(
-                              'Selesai',
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _isSaving ? null : _simpanForm,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _isSaving ? Colors.grey.shade400 : Colors.blue.shade700,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: _isSaving
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Menyimpan...',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                    ),
-                  ),
+                          ],
+                        )
+                      : const Text(
+                          'Simpan Pengembalian',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                ),
+              ),
 
               const SizedBox(height: 12),
 
