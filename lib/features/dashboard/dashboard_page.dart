@@ -229,7 +229,7 @@ Future<Map<String, dynamic>?> _checkActiveBooking() async {
       // 2. Ambil kendaraan yang sedang dipinjam (status ON_GOING)
       final ongoingBookingsSnapshot = await FirebaseFirestore.instance
           .collection('vehicle_bookings')
-          .where('status', isEqualTo: 'ON_GOING')
+          .where('status', isEqualTo: 'ON_GOING, APPROVAL_3, APPROVAL_2')
           .get();
       
       return {

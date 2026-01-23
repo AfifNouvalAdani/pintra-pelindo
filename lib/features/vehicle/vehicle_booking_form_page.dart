@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import '../dashboard/dashboard_page.dart';
 import '../vehicle/detail_peminjaman_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 // Custom Time Picker 24 Jam
 class TimePicker24Hour extends StatefulWidget {
@@ -271,20 +270,28 @@ Future<void> _checkExistingBookings() async {
           .where('statusAktif', isEqualTo: true)
           .get();
 
-      // 2. Ambil kendaraan yang sedang dipinjam (ON_GOING)
-      final ongoingBookingsSnapshot = await FirebaseFirestore.instance
+      // 2. ✅ PERBAIKAN: Ambil kendaraan yang sedang dipinjam ATAU menunggu approval
+      final activeBookingsSnapshot = await FirebaseFirestore.instance
           .collection('vehicle_bookings')
-          .where('status', isEqualTo: 'ON_GOING')
+          .where('status', whereIn: [
+            'APPROVAL_2',  // ✅ Tambahkan ini
+            'APPROVAL_3',  // ✅ Tambahkan ini
+            'ON_GOING'     // ✅ Tetap ada
+          ])
           .get();
 
-      final ongoingVehicleIds = ongoingBookingsSnapshot.docs
+      final bookedVehicleIds = activeBookingsSnapshot.docs
           .map((doc) => doc.data()['vehicleId'] as String?)
           .where((id) => id != null)
           .toList();
 
-      // 3. Filter kendaraan yang tidak sedang dipinjam
+      print('🚗 Total kendaraan aktif: ${vehiclesSnapshot.docs.length}');
+      print('🔴 Kendaraan yang sudah dibooking/digunakan: ${bookedVehicleIds.length}');
+      print('🔴 IDs: $bookedVehicleIds');
+
+      // 3. Filter kendaraan yang tidak sedang dipinjam/dibooking
       final availableVehicles = vehiclesSnapshot.docs
-          .where((doc) => !ongoingVehicleIds.contains(doc.id))
+          .where((doc) => !bookedVehicleIds.contains(doc.id))
           .map((doc) {
         final data = doc.data();
         return {
