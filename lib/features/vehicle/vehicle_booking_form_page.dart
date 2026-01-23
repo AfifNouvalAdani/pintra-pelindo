@@ -204,6 +204,7 @@ class _VehicleBookingFormPageState extends State<VehicleBookingFormPage> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _availableVehicles = [];
   List<Map<String, dynamic>> _userBookings = [];
+  bool _isDateTimeComplete = false;
 
   @override
   void initState() {
@@ -214,11 +215,10 @@ class _VehicleBookingFormPageState extends State<VehicleBookingFormPage> {
   // Load data dari Firestore
   Future<void> _loadData() async {
     try {
-      // 1. Cek apakah user sudah punya booking aktif
       await _checkExistingBookings();
       
-      // 2. Load kendaraan yang tersedia
-      await _loadAvailableVehicles();
+      // ✅ GANTI: Panggil function baru
+      await _loadAvailableVehiclesForDateRange();
       
       setState(() {
         _isLoading = false;
@@ -261,37 +261,90 @@ Future<void> _checkExistingBookings() async {
   }
 }
 
-  // Load kendaraan yang tersedia (status aktif dan tidak sedang dipinjam)
-  Future<void> _loadAvailableVehicles() async {
+  // Load kendaraan berdasarkan rentang waktu yang dipilih
+  Future<void> _loadAvailableVehiclesForDateRange() async {
+    // Cek apakah tanggal sudah dipilih
+    if (tglPinjam == null || jamPinjam == null || 
+        tglKembali == null || jamKembali == null) {
+      // Jika belum pilih tanggal, tampilkan semua kendaraan aktif
+      final vehiclesSnapshot = await FirebaseFirestore.instance
+          .collection('vehicles')
+          .where('statusAktif', isEqualTo: true)
+          .get();
+      
+      setState(() {
+        _availableVehicles = vehiclesSnapshot.docs.map((doc) {
+          final data = doc.data();
+          return {
+            'id': doc.id,
+            'nama': data['nama'] ?? 'Tanpa Nama',
+            'platNomor': data['platNomor'] ?? '-',
+            'jenis': data['jenis'] ?? 'Mobil',
+            'tahun': data['tahun'] ?? '-',
+            'kursi': data['kursi'] ?? '0',
+            'bbm': data['bbm'] ?? '-',
+            'transmisi': data['transmisi'] ?? '-',
+            'kelengkapan': (data['kelengkapan'] as List?) ?? [],
+            'odometerTerakhir': data['odometerTerakhir'] ?? 0,
+          };
+        }).toList();
+      });
+      return;
+    }
+
     try {
+      // Gabungkan tanggal dan waktu
+      final waktuPinjam = _combineDateTime(tglPinjam!, jamPinjam!);
+      final waktuKembali = _combineDateTime(tglKembali!, jamKembali!);
+
       // 1. Ambil semua kendaraan aktif
       final vehiclesSnapshot = await FirebaseFirestore.instance
           .collection('vehicles')
           .where('statusAktif', isEqualTo: true)
           .get();
 
-      // 2. ✅ PERBAIKAN: Ambil kendaraan yang sedang dipinjam ATAU menunggu approval
+      // 2. Ambil semua booking yang belum selesai
       final activeBookingsSnapshot = await FirebaseFirestore.instance
           .collection('vehicle_bookings')
           .where('status', whereIn: [
-            'APPROVAL_2',  // ✅ Tambahkan ini
-            'APPROVAL_3',  // ✅ Tambahkan ini
-            'ON_GOING'     // ✅ Tetap ada
+            'SUBMITTED',
+            'APPROVAL_1',
+            'APPROVAL_2',
+            'APPROVAL_3',
+            'ON_GOING'
           ])
           .get();
 
-      final bookedVehicleIds = activeBookingsSnapshot.docs
-          .map((doc) => doc.data()['vehicleId'] as String?)
-          .where((id) => id != null)
-          .toList();
+      // 3. Filter kendaraan yang BENTROK WAKTU
+      Set<String> unavailableVehicleIds = {};
+      
+      for (var bookingDoc in activeBookingsSnapshot.docs) {
+        final booking = bookingDoc.data();
+        final bookingStart = (booking['waktuPinjam'] as Timestamp).toDate();
+        final bookingEnd = (booking['waktuKembali'] as Timestamp).toDate();
+        final vehicleId = booking['vehicleId'] as String?;
+
+        if (vehicleId == null) continue;
+
+        // Cek apakah ada bentrok waktu
+        // Bentrok jika: (waktu_baru_mulai < waktu_lama_selesai) DAN (waktu_baru_selesai > waktu_lama_mulai)
+        bool isBentrok = waktuPinjam.isBefore(bookingEnd) && 
+                        waktuKembali.isAfter(bookingStart);
+
+        if (isBentrok) {
+          unavailableVehicleIds.add(vehicleId);
+          print('⚠️ Kendaraan $vehicleId bentrok waktu!');
+          print('   Booking lama: ${DateFormat('dd/MM HH:mm').format(bookingStart)} - ${DateFormat('dd/MM HH:mm').format(bookingEnd)}');
+          print('   Booking baru: ${DateFormat('dd/MM HH:mm').format(waktuPinjam)} - ${DateFormat('dd/MM HH:mm').format(waktuKembali)}');
+        }
+      }
 
       print('🚗 Total kendaraan aktif: ${vehiclesSnapshot.docs.length}');
-      print('🔴 Kendaraan yang sudah dibooking/digunakan: ${bookedVehicleIds.length}');
-      print('🔴 IDs: $bookedVehicleIds');
+      print('🔴 Kendaraan tidak tersedia (bentrok waktu): ${unavailableVehicleIds.length}');
 
-      // 3. Filter kendaraan yang tidak sedang dipinjam/dibooking
+      // 4. Filter kendaraan yang TIDAK bentrok
       final availableVehicles = vehiclesSnapshot.docs
-          .where((doc) => !bookedVehicleIds.contains(doc.id))
+          .where((doc) => !unavailableVehicleIds.contains(doc.id))
           .map((doc) {
         final data = doc.data();
         return {
@@ -316,7 +369,6 @@ Future<void> _checkExistingBookings() async {
     }
   }
 
-  // Fungsi untuk memilih tanggal
   Future<void> pickDate(bool isPinjam) async {
     final result = await showDatePicker(
       context: context,
@@ -346,11 +398,24 @@ Future<void> _checkExistingBookings() async {
         } else {
           tglKembali = result;
         }
+        // ✅ CEK APAKAH SEMUA WAKTU SUDAH LENGKAP
+        _isDateTimeComplete = tglPinjam != null && jamPinjam != null && 
+                              tglKembali != null && jamKembali != null;
+        
+        // ✅ TAMBAHKAN: Reset pilihan kendaraan karena ketersediaan berubah
+        if (_isDateTimeComplete) {
+          kendaraanId = null;
+          selectedVehicle = null;
+        }
       });
+      
+      // ✅ Reload kendaraan setelah pilih tanggal
+      if (_isDateTimeComplete) {
+        await _loadAvailableVehiclesForDateRange();
+      }
     }
   }
 
-  // Fungsi untuk memilih waktu (menggunakan custom picker)
   Future<void> pickTime(bool isPinjam) async {
     final currentTime = isPinjam ? jamPinjam : jamKembali;
     
@@ -358,18 +423,32 @@ Future<void> _checkExistingBookings() async {
       context: context,
       builder: (context) => TimePicker24Hour(
         initialTime: currentTime ?? TimeOfDay.now(),
-        onTimeSelected: (selectedTime) {
+        onTimeSelected: (selectedTime) async {
           setState(() {
             if (isPinjam) {
               jamPinjam = selectedTime;
             } else {
               jamKembali = selectedTime;
             }
+            // ✅ CEK APAKAH SEMUA WAKTU SUDAH LENGKAP
+            _isDateTimeComplete = tglPinjam != null && jamPinjam != null && 
+                                  tglKembali != null && jamKembali != null;
+            
+            // ✅ TAMBAHKAN: Reset pilihan kendaraan karena ketersediaan berubah
+            if (_isDateTimeComplete) {
+              kendaraanId = null;
+              selectedVehicle = null;
+            }
           });
+          
+          // ✅ Reload kendaraan setelah pilih jam
+          if (_isDateTimeComplete) {
+            await _loadAvailableVehiclesForDateRange();
+          }
         },
       ),
     );
-  }
+}
 
   // Fungsi format tanggal
   String formatDate(DateTime? d) =>
@@ -419,6 +498,31 @@ Future<void> _checkExistingBookings() async {
     if (kendaraanId == null) {
       _showSnackBar('Pilih kendaraan');
       return;
+    }
+
+    final waktuPinjamTemp = _combineDateTime(tglPinjam!, jamPinjam!);
+    final waktuKembaliTemp = _combineDateTime(tglKembali!, jamKembali!);
+
+    // Cek lagi apakah kendaraan masih tersedia
+    final doubleBookingCheck = await FirebaseFirestore.instance
+        .collection('vehicle_bookings')
+        .where('vehicleId', isEqualTo: kendaraanId)
+        .where('status', whereIn: ['SUBMITTED', 'APPROVAL_1', 'APPROVAL_2', 'APPROVAL_3', 'ON_GOING'])
+        .get();
+
+    for (var doc in doubleBookingCheck.docs) {
+      final booking = doc.data();
+      final bookingStart = (booking['waktuPinjam'] as Timestamp).toDate();
+      final bookingEnd = (booking['waktuKembali'] as Timestamp).toDate();
+      
+      bool isBentrok = waktuPinjamTemp.isBefore(bookingEnd) && 
+                      waktuKembaliTemp.isAfter(bookingStart);
+      
+      if (isBentrok) {
+        _showSnackBar('Kendaraan ini sudah dibooking orang lain pada waktu yang sama. Silakan refresh dan pilih kendaraan lain.');
+        await _loadAvailableVehiclesForDateRange(); // Refresh list
+        return;
+      }
     }
 
     // Validasi tanggal dan waktu
@@ -1052,7 +1156,7 @@ child: Column(
 
               // Pilih Kendaraan
               Text(
-                'Pilih Kendaraan (${_availableVehicles.length} tersedia)',
+                'Pilih Kendaraan${_isDateTimeComplete ? ' (${_availableVehicles.length} tersedia)' : ''}',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
@@ -1060,8 +1164,36 @@ child: Column(
                 ),
               ),
               const SizedBox(height: 8),
-              
-              if (_availableVehicles.isEmpty)
+
+              // ✅ TAMBAHKAN WARNING JIKA BELUM PILIH TANGGAL/JAM
+              if (!_isDateTimeComplete)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: Colors.blue.shade700,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Pilih tanggal dan jam peminjaman terlebih dahulu untuk melihat kendaraan yang tersedia',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.blue.shade800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (_availableVehicles.isEmpty)
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -1078,7 +1210,7 @@ child: Column(
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Tidak ada kendaraan tersedia saat ini. Silakan coba lagi nanti.',
+                          'Tidak ada kendaraan tersedia pada waktu yang dipilih. Silakan pilih waktu lain.',
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.orange.shade800,
