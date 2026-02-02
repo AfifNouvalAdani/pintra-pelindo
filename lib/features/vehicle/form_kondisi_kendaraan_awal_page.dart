@@ -37,7 +37,10 @@ class _FormKondisiKendaraanAwalPageState
   String? kelengkapan;
   bool p3k = true;
   bool dongkrak = true;
-  bool segitiga = true;
+  bool apar = true;
+  bool segitigaBahaya = true;
+  bool banSerep = true;
+
 
   final TextEditingController uraianKondisiController =
       TextEditingController();
@@ -51,13 +54,48 @@ class _FormKondisiKendaraanAwalPageState
   String? _photoBase64; // ✅ Ganti dari _photoUrl ke _photoBase64
   bool _isSaving = false;
 
-  // Fungsi untuk menghitung persentase kelengkapan
+  List<String> _kelengkapanKendaraan = [];
+
+  @override
+void initState() {
+  super.initState();
+  _loadKelengkapanKendaraan();
+}
+
+Future<void> _loadKelengkapanKendaraan() async {
+  try {
+    final vehicleDoc = await FirebaseFirestore.instance
+        .collection('vehicles')
+        .doc(widget.vehicleId)
+        .get();
+    
+    if (vehicleDoc.exists) {
+      final data = vehicleDoc.data();
+      final kelengkapanArray = data?['kelengkapan'] as List<dynamic>?;
+      
+      if (kelengkapanArray != null) {
+        setState(() {
+          _kelengkapanKendaraan = kelengkapanArray.map((e) => e.toString()).toList();
+          
+          // Set default value berdasarkan data dari database
+          p3k = _kelengkapanKendaraan.contains('P3K');
+          dongkrak = _kelengkapanKendaraan.contains('Dongkrak');
+          apar = _kelengkapanKendaraan.contains('Apar');
+          segitigaBahaya = _kelengkapanKendaraan.contains('Segitiga Bahaya');
+          banSerep = _kelengkapanKendaraan.contains('ban serep');
+        });
+      }
+    }
+  } catch (e) {
+    print('Error loading kelengkapan kendaraan: $e');
+  }
+}
+
   double _calculateCompleteness() {
-    final items = [p3k, dongkrak, segitiga];
+    final items = [p3k, dongkrak, apar, segitigaBahaya, banSerep];
     final completed = items.where((item) => item == true).length;
     return completed / items.length;
   }
-
   // Widget untuk checklist item yang konsisten
   Widget _buildChecklistItem(String label, bool value, Function(bool?) onChanged) {
     return Container(
@@ -149,8 +187,11 @@ class _FormKondisiKendaraanAwalPageState
     }
 
     if (kelengkapan == 'Tidak Lengkap') {
-      if (p3k && dongkrak && segitiga) {
-        _showSnackBar('Pilih kelengkapan yang tidak tersedia');
+      // 🔥 FIX: Cek apakah ADA yang unchecked (hilang)
+      final adaYangHilang = !p3k || !dongkrak || !apar || !segitigaBahaya || !banSerep;
+      
+      if (!adaYangHilang) {
+        _showSnackBar('Semua kelengkapan masih ada. Pilih "Lengkap" atau uncheck item yang hilang');
         return;
       }
 
@@ -175,7 +216,6 @@ class _FormKondisiKendaraanAwalPageState
     setState(() => _isSaving = true);
 
     try {
-      // 1️⃣ CEK STATUS BOOKING
       final bookingDoc = await FirebaseFirestore.instance
           .collection('vehicle_bookings')
           .doc(widget.bookingId)
@@ -190,38 +230,39 @@ class _FormKondisiKendaraanAwalPageState
         throw Exception('Peminjaman tidak dalam status yang tepat untuk pengambilan kendaraan. Status saat ini: $currentStatus');
       }
 
-      // 2️⃣ SIAPKAN DATA KONDISI AWAL
+      // 🔥 REVISI: Siapkan array kelengkapan yang tersedia
+      List<String> kelengkapanTersedia = [];
+      if (p3k) kelengkapanTersedia.add('P3K');
+      if (dongkrak) kelengkapanTersedia.add('Dongkrak');
+      if (apar) kelengkapanTersedia.add('Apar');
+      if (segitigaBahaya) kelengkapanTersedia.add('Segitiga Bahaya');
+      if (banSerep) kelengkapanTersedia.add('ban serep');
+
+      // Siapkan data kondisi awal
       Map<String, dynamic> kondisiAwalData = {
         'kondisi': kondisi,
         'kelengkapan': kelengkapan,
-        'kelengkapanItems': {
-          'p3k': p3k,
-          'dongkrak': dongkrak,
-          'segitiga': segitiga,
-        },
+        'kelengkapanItems': kelengkapanTersedia, // 🔥 REVISI: Simpan sebagai array
         'odometerAwal': odometerValue,
         'timestamp': Timestamp.now(),
         'filledBy': widget.userId,
         'filledByName': widget.userName,
       };
 
-      // Tambahkan uraian jika kondisi tidak baik
       if (kondisi == 'Tidak Baik' && uraianKondisiController.text.isNotEmpty) {
         kondisiAwalData['uraianKondisi'] = uraianKondisiController.text;
       }
 
-      // Tambahkan uraian jika kelengkapan tidak lengkap
       if (kelengkapan == 'Tidak Lengkap' && uraianKelengkapanController.text.isNotEmpty) {
         kondisiAwalData['uraianKelengkapan'] = uraianKelengkapanController.text;
       }
 
-      // Tambahkan foto sebagai base64 jika ada
       if (_photoBase64 != null && _photoBase64!.isNotEmpty) {
         kondisiAwalData['fotoBase64'] = _photoBase64;
         kondisiAwalData['fotoTimestamp'] = Timestamp.now();
       }
 
-      // 3️⃣ UPDATE DOCUMENT VEHICLE_BOOKINGS
+      // Update booking
       await FirebaseFirestore.instance
           .collection('vehicle_bookings')
           .doc(widget.bookingId)
@@ -234,17 +275,19 @@ class _FormKondisiKendaraanAwalPageState
 
       print('✅ Booking updated to ON_GOING');
 
-      // 4️⃣ UPDATE ODOMETER DI COLLECTION VEHICLES
+      // 🔥 REVISI: Update vehicles collection dengan struktur yang benar
       await FirebaseFirestore.instance
           .collection('vehicles')
           .doc(widget.vehicleId)
           .update({
+        'kelengkapan': kelengkapanTersedia, // 🔥 Update array kelengkapan
         'odometerTerakhir': odometerValue,
         'updatedAt': Timestamp.now(),
       });
 
-      print('✅ Vehicle odometer updated');
+      print('✅ Vehicle updated');
 
+      // Approval history tetap sama
       await FirebaseFirestore.instance
           .collection('vehicle_bookings')
           .doc(widget.bookingId)
@@ -253,9 +296,9 @@ class _FormKondisiKendaraanAwalPageState
         'action': 'VEHICLE_PICKED_UP',
         'oldStatus': 'APPROVAL_3',
         'newStatus': 'ON_GOING',
-        'status': 'ON_GOING', // ✅ TAMBAHKAN INI - Penting untuk timeline
+        'status': 'ON_GOING',
         'actionBy': widget.userName,
-        'actionRole': widget.role, // ✅ Tambahkan role
+        'actionRole': widget.role,
         'userId': widget.userId,
         'timestamp': Timestamp.now(),
         'note': 'Kendaraan telah diambil dan kondisi awal telah dicatat oleh ${widget.userName}',
@@ -267,7 +310,6 @@ class _FormKondisiKendaraanAwalPageState
       setState(() => _isSaving = false);
 
       if (mounted) {
-        // 6️⃣ TAMPILKAN PESAN SUKSES
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Kondisi kendaraan berhasil dicatat'),
@@ -277,7 +319,6 @@ class _FormKondisiKendaraanAwalPageState
           ),
         );
 
-        // 7️⃣ NAVIGATE KE DASHBOARD TAB AKTIVITAS
         await Future.delayed(const Duration(milliseconds: 500));
         
         Navigator.pushAndRemoveUntil(
@@ -301,7 +342,7 @@ class _FormKondisiKendaraanAwalPageState
         _showSnackBar('Gagal menyimpan: ${e.toString()}');
       }
     }
-  }
+    }
 
 
   void _showSnackBar(String message) {
@@ -845,9 +886,21 @@ class _FormKondisiKendaraanAwalPageState
                           ),
                           const SizedBox(height: 8),
                           _buildChecklistItem(
-                            'Segitiga Darurat',
-                            segitiga,
-                            (value) => setState(() => segitiga = value ?? false),
+                            'Apar',
+                            apar,
+                            (value) => setState(() => apar = value ?? false),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildChecklistItem(
+                            'Segitiga Bahaya',
+                            segitigaBahaya,
+                            (value) => setState(() => segitigaBahaya = value ?? false),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildChecklistItem(
+                            'Ban Serep',
+                            banSerep,
+                            (value) => setState(() => banSerep = value ?? false),
                           ),
 
                           const SizedBox(height: 16),

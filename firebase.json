@@ -1,1 +1,54 @@
-{"flutter":{"platforms":{"dart":{"lib/firebase_options.dart":{"projectId":"pintra-pelindo","configurations":{"android":"1:413771361798:android:5395f625229cdeda555d87","web":"1:413771361798:web:c4853ee962d77d10555d87"}}},"android":{"default":{"projectId":"pintra-pelindo","appId":"1:413771361798:android:5395f625229cdeda555d87","fileOutput":"android/app/google-services.json"}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "pintra-pelindo",
+          "configurations": {
+            "android": "1:413771361798:android:5395f625229cdeda555d87",
+            "web": "1:413771361798:web:c4853ee962d77d10555d87"
+          }
+        }
+      },
+      "android": {
+        "default": {
+          "projectId": "pintra-pelindo",
+          "appId": "1:413771361798:android:5395f625229cdeda555d87",
+          "fileOutput": "android/app/google-services.json"
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run lint"
+      ]
+    }
+  ],
+  "hosting": {
+    "site": "pintra-mobile",
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

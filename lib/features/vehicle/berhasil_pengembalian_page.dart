@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // ✅ Tambahkan import ini
+import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-
 class BerhasilPengembalianPage extends StatefulWidget {
-  final String bookingId; // ✅ Cukup kirim ID saja
+  final String bookingId;
 
   const BerhasilPengembalianPage({
     super.key,
@@ -104,6 +103,247 @@ class _BerhasilPengembalianPageState extends State<BerhasilPengembalianPage> {
     return DateFormat('HH:mm', 'id_ID').format(date);
   }
 
+  Widget _buildTimeline() {
+    final steps = [
+      {'label': 'Pengajuan oleh peminjam', 'status': 'SUBMITTED'},
+      {'label': 'Approval Manager Divisi', 'status': 'APPROVAL_1'},
+      {'label': 'Verifikasi oleh Operator', 'status': 'APPROVAL_2'},
+      {'label': 'Approval Manager Umum', 'status': 'APPROVAL_3'},
+      {'label': 'Kendaraan Digunakan', 'status': 'ON_GOING'},
+      {'label': 'Pengembalian Selesai', 'status': 'DONE'},
+    ];
+    
+    return Column(
+      children: List.generate(steps.length, (index) {
+        final step = steps[index];
+        final isActive = index <= 5;
+        final isLast = index == steps.length - 1;
+
+        // Cari timestamp dari approval history
+        final history = _approvalHistory.firstWhere(
+          (h) => h['newStatus'] == step['status'],
+          orElse: () => {},
+        );
+
+        String timeText = 'Menunggu';
+        if (history.isNotEmpty && history['timestamp'] != null) {
+          timeText = _formatTimestamp(history['timestamp']);
+        } else if (step['status'] == 'SUBMITTED' && _bookingData?['createdAt'] != null) {
+          timeText = _formatTimestamp(_bookingData!['createdAt']);
+        } else if (step['status'] == 'ON_GOING' && _bookingData?['actualPickupTime'] != null) {
+          timeText = _formatTimestamp(_bookingData!['actualPickupTime']);
+        } else if (step['status'] == 'DONE' && _bookingData?['actualReturnTime'] != null) {
+          timeText = _formatTimestamp(_bookingData!['actualReturnTime']);
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Timeline Dot and Line
+            Column(
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: isActive ? Colors.blue.shade700 : Colors.grey.shade300,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white,
+                      width: 3,
+                    ),
+                  ),
+                  child: isActive
+                      ? Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: 14,
+                        )
+                      : null,
+                ),
+                if (!isLast)
+                  Container(
+                    width: 2,
+                    height: 40,
+                    color: isActive ? Colors.blue.shade300 : Colors.grey.shade200,
+                  ),
+              ],
+            ),
+
+            const SizedBox(width: 16),
+
+            // Step Content
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(bottom: isLast ? 0 : 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      step['label']!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: isActive
+                            ? Colors.grey.shade900
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      timeText,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
+  // Widget untuk menampilkan status pengembalian
+  Widget _buildStatusPengembalian(String status) {
+    final isSepertiAwal = status == 'Seperti Awal Peminjaman';
+    
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: isSepertiAwal ? Colors.green.shade50 : Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isSepertiAwal ? Colors.green.shade100 : Colors.orange.shade100,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isSepertiAwal ? Icons.check_circle_rounded : Icons.info_rounded,
+            color: isSepertiAwal ? Colors.green.shade700 : Colors.orange.shade700,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Status Pengembalian',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  status,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: isSepertiAwal ? Colors.green.shade800 : Colors.orange.shade800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget untuk menampilkan kelengkapan items
+  Widget _buildKelengkapanItems(String label, dynamic items) {
+    List<String> kelengkapanList = [];
+    
+    if (items is List) {
+      kelengkapanList = items.map((e) => e.toString()).toList();
+    }
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: kelengkapanList.map((item) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.blue.shade100),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.check_circle_rounded,
+                      size: 14,
+                      color: Colors.blue.shade700,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      item,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.blue.shade800,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailItem(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -165,9 +405,16 @@ class _BerhasilPengembalianPageState extends State<BerhasilPengembalianPage> {
     final booking = _bookingData!;
     final vehicle = _vehicleData;
     final kondisiAkhir = booking['kondisiAkhir'] as Map<String, dynamic>?;
-    
     final waktuPinjam = booking['waktuPinjam'] as Timestamp?;
     final waktuKembali = booking['waktuKembali'] as Timestamp?;
+    final kondisiAwal = booking['kondisiAwal'] as Map<String, dynamic>?;
+
+    final jarakTempuh = (kondisiAwal != null && 
+                     kondisiAkhir != null &&
+                     kondisiAwal['odometerAwal'] != null && 
+                     kondisiAkhir['odometerAkhir'] != null)
+    ? kondisiAkhir['odometerAkhir'] - kondisiAwal['odometerAwal']
+    : null;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -416,6 +663,53 @@ class _BerhasilPengembalianPageState extends State<BerhasilPengembalianPage> {
                       ],
                     ),
 
+                    if (kondisiAwal != null) ...[
+                      const SizedBox(height: 16),
+                      Divider(color: Colors.grey.shade200),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.start_rounded,
+                              color: Colors.blue.shade700,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Kondisi Awal',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade900,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _buildDetailItem('Kondisi Saat Pinjam', kondisiAwal['kondisi'] ?? '-'),
+                      _buildDetailItem('Kelengkapan Saat Pinjam', kondisiAwal['kelengkapan'] ?? '-'),
+                      
+                      // Tampilkan items kelengkapan
+                      if (kondisiAwal['kelengkapanItems'] != null) 
+                        _buildKelengkapanItems('Kelengkapan Tersedia Saat Pinjam', kondisiAwal['kelengkapanItems']),
+                      
+                      _buildDetailItem('Odometer Awal', kondisiAwal['odometerAwal']?.toString() ?? '-'),
+                      
+                      if (kondisiAwal['uraianKondisi'] != null && kondisiAwal['uraianKondisi'].toString().isNotEmpty)
+                        _buildDetailItem('Keterangan Kondisi Awal', kondisiAwal['uraianKondisi']),
+                      
+                      if (kondisiAwal['uraianKelengkapan'] != null && kondisiAwal['uraianKelengkapan'].toString().isNotEmpty)
+                        _buildDetailItem('Keterangan Kelengkapan Awal', kondisiAwal['uraianKelengkapan']),
+                    ],
+
                     // Data Pengembalian
                     if (kondisiAkhir != null) ...[
                       const SizedBox(height: 16),
@@ -448,10 +742,47 @@ class _BerhasilPengembalianPageState extends State<BerhasilPengembalianPage> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      _buildDetailItem('Kondisi Saat Kembali', kondisiAkhir['kondisi'] ?? '-'),
+                      
+                      // Status Pengembalian
+                      if (kondisiAkhir['statusPengembalian'] != null)
+                        _buildStatusPengembalian(kondisiAkhir['statusPengembalian']),
+                      
+                      // Kondisi Akhir
+                      if (kondisiAkhir['statusPengembalian'] == 'Ada Perubahan') ...[
+                        _buildDetailItem('Kondisi Awal', kondisiAkhir['kondisiAwal'] ?? '-'),
+                        _buildDetailItem('Kondisi Akhir', kondisiAkhir['kondisiAkhir'] ?? '-'),
+                      ] else if (kondisiAkhir['kondisi'] != null) ...[
+                        _buildDetailItem('Kondisi Saat Kembali', kondisiAkhir['kondisi']),
+                      ],
+                      
+                      // Kelengkapan Akhir
+                      if (kondisiAkhir['statusPengembalian'] == 'Ada Perubahan') ...[
+                        _buildDetailItem('Kelengkapan Awal', kondisiAkhir['kelengkapanAwal'] ?? '-'),
+                        _buildDetailItem('Kelengkapan Akhir', kondisiAkhir['kelengkapanAkhir'] ?? '-'),
+                      ] else if (kondisiAkhir['kelengkapan'] != null) ...[
+                        _buildDetailItem('Kelengkapan Saat Kembali', kondisiAkhir['kelengkapan']),
+                      ],
+                      
+                      // Items Kelengkapan
+                      if (kondisiAkhir['kelengkapanItems'] != null)
+                        _buildKelengkapanItems('Kelengkapan Tersedia Saat Pengembalian', kondisiAkhir['kelengkapanItems']),
+                      
+                      // Uraian jika ada perubahan
+                      if (kondisiAkhir['uraianKondisi'] != null && kondisiAkhir['uraianKondisi'].toString().isNotEmpty)
+                        _buildDetailItem('Keterangan Perubahan Kondisi', kondisiAkhir['uraianKondisi']),
+                      
+                      if (kondisiAkhir['uraianKelengkapan'] != null && kondisiAkhir['uraianKelengkapan'].toString().isNotEmpty)
+                        _buildDetailItem('Keterangan Perubahan Kelengkapan', kondisiAkhir['uraianKelengkapan']),
+                      
+                      // Odometer dan BBM
                       _buildDetailItem('Sisa BBM', kondisiAkhir['sisaBBM'] ?? '-'),
                       _buildDetailItem('Odometer Akhir', kondisiAkhir['odometerAkhir']?.toString() ?? '-'),
-                      _buildDetailItem('Dikembalikan Pada', _formatTimestamp(kondisiAkhir['timestamp'] as Timestamp?)),
+                      
+                      if (jarakTempuh != null)
+                        _buildDetailItem('Jarak Tempuh', '$jarakTempuh km'),
+                      
+                      _buildDetailItem('Dikembalikan Pada', _formatTimestamp(kondisiAkhir['timestampPengembalian'] as Timestamp?)),
+                      _buildDetailItem('Dikembalikan Oleh', kondisiAkhir['returnedByName'] ?? '-'),
                     ],
                   ],
                 ),
@@ -489,137 +820,6 @@ class _BerhasilPengembalianPageState extends State<BerhasilPengembalianPage> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildTimeline() {
-    final steps = [
-      {'label': 'Pengajuan oleh peminjam', 'status': 'SUBMITTED'},
-      {'label': 'Approval Manager Divisi', 'status': 'APPROVAL_1'},
-      {'label': 'Verifikasi oleh Operator', 'status': 'APPROVAL_2'},
-      {'label': 'Approval Manager Umum', 'status': 'APPROVAL_3'},
-      {'label': 'Kendaraan Digunakan', 'status': 'ON_GOING'},
-      {'label': 'Pengembalian Selesai', 'status': 'DONE'},
-    ];
-
-    return Column(
-      children: List.generate(steps.length, (index) {
-        final step = steps[index];
-        final isActive = index <= 5; // Semua aktif karena sudah selesai
-        final isLast = index == steps.length - 1;
-
-        // Cari timestamp dari approval history
-        final history = _approvalHistory.firstWhere(
-          (h) => h['newStatus'] == step['status'],
-          orElse: () => {},
-        );
-
-        String timeText = 'Menunggu';
-        if (history.isNotEmpty && history['timestamp'] != null) {
-          timeText = _formatTimestamp(history['timestamp']);
-        } else if (step['status'] == 'SUBMITTED' && _bookingData?['createdAt'] != null) {
-          timeText = _formatTimestamp(_bookingData!['createdAt']);
-        } else if (step['status'] == 'ON_GOING' && _bookingData?['actualPickupTime'] != null) {
-          timeText = _formatTimestamp(_bookingData!['actualPickupTime']);
-        } else if (step['status'] == 'DONE' && _bookingData?['actualReturnTime'] != null) {
-          timeText = _formatTimestamp(_bookingData!['actualReturnTime']);
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Timeline Dot and Line
-            Column(
-              children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: isActive ? Colors.blue.shade700 : Colors.grey.shade300,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white,
-                      width: 3,
-                    ),
-                  ),
-                  child: isActive
-                      ? Icon(
-                          Icons.check_rounded,
-                          color: Colors.white,
-                          size: 14,
-                        )
-                      : null,
-                ),
-                if (!isLast)
-                  Container(
-                    width: 2,
-                    height: 40,
-                    color: isActive ? Colors.blue.shade300 : Colors.grey.shade200,
-                  ),
-              ],
-            ),
-
-            const SizedBox(width: 16),
-
-            // Step Content
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(bottom: isLast ? 0 : 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      step['label']!,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: isActive
-                            ? Colors.grey.shade900
-                            : Colors.grey.shade600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      timeText,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        );
-      }),
-    );
-  }
-
-  Widget _buildDetailItem(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey.shade600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey.shade900,
-            ),
-          ),
-        ],
       ),
     );
   }

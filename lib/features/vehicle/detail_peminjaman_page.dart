@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../vehicle/form_kondisi_kendaraan_awal_page.dart';
 import '../vehicle/form_pengembalian_kendaraan_page.dart';
+import '../services/approval_notification_service.dart';
 
 class DetailPeminjamanPage extends StatefulWidget {
   final Map<String, dynamic> data;
@@ -126,7 +127,334 @@ class _DetailPeminjamanPageState extends State<DetailPeminjamanPage> {
     return DateFormat('HH:mm', 'id_ID').format(dateTime);
   }
 
-  // Fungsi untuk approve booking
+void _showSnackBar(String message) {
+  if (mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade600,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
+
+// Fungsi untuk menampilkan dialog pilih kendaraan
+// Fungsi untuk menampilkan dialog pilih kendaraan
+Future<void> _showSelectVehicleDialog() async {
+  try {
+    // ✅ AMBIL SEMUA KENDARAAN AKTIF (tidak filter status)
+    final vehiclesSnapshot = await FirebaseFirestore.instance
+        .collection('vehicles')
+        .where('statusAktif', isEqualTo: true)
+        .get();
+
+    if (vehiclesSnapshot.docs.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Tidak ada kendaraan yang terdaftar'),
+            backgroundColor: Colors.orange.shade600,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    // ✅ AMBIL DATA BOOKING YANG SEDANG DIEDIT
+    final currentBookingStart = (_bookingData?['waktuPinjam'] as Timestamp?)?.toDate();
+    final currentBookingEnd = (_bookingData?['waktuKembali'] as Timestamp?)?.toDate();
+
+    if (currentBookingStart == null || currentBookingEnd == null) {
+      _showSnackBar('Data waktu peminjaman tidak valid');
+      return;
+    }
+
+    // ✅ AMBIL SEMUA BOOKING AKTIF SELAIN BOOKING INI
+    final activeBookingsSnapshot = await FirebaseFirestore.instance
+        .collection('vehicle_bookings')
+        .where('status', whereIn: [
+          'SUBMITTED',
+          'APPROVAL_1',
+          'APPROVAL_2',
+          'APPROVAL_3',
+          'ON_GOING'
+        ])
+        .get();
+
+    // ✅ HITUNG KENDARAAN YANG BENTROK WAKTU (TAPI EXCLUDE BOOKING SENDIRI)
+    Set<String> unavailableVehicleIds = {};
+    
+    for (var bookingDoc in activeBookingsSnapshot.docs) {
+      // ✅ SKIP JIKA INI BOOKING YANG SEDANG DIEDIT
+      if (bookingDoc.id == widget.data['id']) continue;
+
+      final booking = bookingDoc.data();
+      final bookingStart = (booking['waktuPinjam'] as Timestamp).toDate();
+      final bookingEnd = (booking['waktuKembali'] as Timestamp).toDate();
+      final vehicleId = booking['vehicleId'] as String?;
+
+      if (vehicleId == null) continue;
+
+      // Cek bentrok waktu
+      bool isBentrok = currentBookingStart.isBefore(bookingEnd) && 
+                      currentBookingEnd.isAfter(bookingStart);
+
+      if (isBentrok) {
+        unavailableVehicleIds.add(vehicleId);
+      }
+    }
+
+    print('🚗 Total kendaraan: ${vehiclesSnapshot.docs.length}');
+    print('🔴 Kendaraan bentrok: ${unavailableVehicleIds.length}');
+
+    // ✅ BUAT LIST KENDARAAN DENGAN STATUS KETERSEDIAAN
+    final vehiclesWithStatus = vehiclesSnapshot.docs.map((doc) {
+      final isAvailable = !unavailableVehicleIds.contains(doc.id);
+      return {
+        'doc': doc,
+        'isAvailable': isAvailable,
+      };
+    }).toList();
+
+    // ✅ FIX ERROR 1: URUTKAN DENGAN TYPE CAST YANG BENAR
+    vehiclesWithStatus.sort((a, b) {
+      final aAvailable = a['isAvailable'] as bool? ?? false;
+      final bAvailable = b['isAvailable'] as bool? ?? false;
+      
+      if (aAvailable == bAvailable) return 0;
+      return aAvailable ? -1 : 1;
+    });
+
+    final selectedVehicle = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.directions_car, color: Colors.blue.shade700),
+            const SizedBox(width: 12),
+            const Text('Pilih Kendaraan'),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: vehiclesWithStatus.length,
+            itemBuilder: (context, index) {
+              final item = vehiclesWithStatus[index];
+              
+              // ✅ FIX ERROR 2: SAFE CAST DENGAN NULL CHECK
+              final vehicle = item['doc'] as QueryDocumentSnapshot<Map<String, dynamic>>;
+              final vehicleData = vehicle.data();
+              final isAvailable = item['isAvailable'] as bool? ?? false;
+              
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                color: isAvailable ? Colors.white : Colors.grey.shade100,
+                child: ListTile(
+                  contentPadding: const EdgeInsets.all(12),
+                  leading: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: isAvailable 
+                          ? Colors.blue.shade50 
+                          : Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.directions_car,
+                      color: isAvailable 
+                          ? Colors.blue.shade700 
+                          : Colors.grey.shade600,
+                      size: 28,
+                    ),
+                  ),
+                  title: Text(
+                    vehicleData['nama'] ?? 'Unknown',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: isAvailable 
+                          ? Colors.grey.shade900 
+                          : Colors.grey.shade600,
+                    ),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 4),
+                      Text(
+                        vehicleData['platNomor'] ?? '-',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.event_seat, size: 14, color: Colors.grey.shade600),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${vehicleData['kursi']} kursi',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                          const SizedBox(width: 12),
+                          Icon(Icons.local_gas_station, size: 14, color: Colors.grey.shade600),
+                          const SizedBox(width: 4),
+                          Text(
+                            vehicleData['bbm'] ?? '-',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                        ],
+                      ),
+                      // ✅ BADGE STATUS
+                      if (!isAvailable) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade100,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Sedang dipinjam user lain',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.orange.shade800,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  trailing: Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: isAvailable 
+                        ? Colors.grey.shade400 
+                        : Colors.grey.shade300,
+                  ),
+                  // ✅ FIX ERROR 3: SAFE ACCESS DENGAN NULL CHECK
+                  onTap: isAvailable
+                      ? () {
+                          Navigator.pop(context, {
+                            'id': vehicle.id,
+                            ...vehicleData,
+                          });
+                        }
+                      : null, // ✅ DISABLE TAP JIKA TIDAK AVAILABLE
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Batal',
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (selectedVehicle != null) {
+      await _updateVehicle(selectedVehicle);
+    }
+  } catch (e) {
+    print('Error showing vehicle selection: $e');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memuat daftar kendaraan: $e'),
+          backgroundColor: Colors.red.shade600,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+}
+
+// Fungsi untuk update kendaraan di booking
+Future<void> _updateVehicle(Map<String, dynamic> newVehicle) async {
+  try {
+    setState(() => _isLoading = true);
+
+    final oldVehicleId = _bookingData?['vehicleId'];
+    final oldVehicleName = _vehicleData?['nama'] ?? 'Unknown';
+
+    // Update booking dengan kendaraan baru
+    await FirebaseFirestore.instance
+        .collection('vehicle_bookings')
+        .doc(widget.data['id'])
+        .update({
+      'vehicleId': newVehicle['id'],
+      'vehicle': {
+        'nama': newVehicle['nama'],
+        'platNomor': newVehicle['platNomor'],
+      },
+      'updatedAt': Timestamp.now(),
+      'lastEditBy': widget.userName,
+      'lastEditRole': widget.role,
+    });
+
+    // Tambahkan ke riwayat approval
+    await FirebaseFirestore.instance
+        .collection('vehicle_bookings')
+        .doc(widget.data['id'])
+        .collection('approval_history')
+        .add({
+      'action': 'VEHICLE_CHANGED',
+      'oldVehicleId': oldVehicleId,
+      'oldVehicleName': oldVehicleName,
+      'newVehicleId': newVehicle['id'],
+      'newVehicleName': newVehicle['nama'],
+      'actionBy': widget.userName,
+      'actionRole': widget.role,
+      'userId': widget.userId,
+      'timestamp': Timestamp.now(),
+      'note': 'Kendaraan diubah dari $oldVehicleName ke ${newVehicle['nama']} oleh ${widget.userName}',
+    });
+
+    // Refresh data
+    await _loadBookingData();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Kendaraan berhasil diubah ke ${newVehicle['nama']}'),
+          backgroundColor: Colors.green.shade600,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengubah kendaraan: $e'),
+          backgroundColor: Colors.red.shade600,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+}
+
   Future<void> _approveBooking() async {
     try {
       setState(() => _isLoading = true);
@@ -151,7 +479,6 @@ class _DetailPeminjamanPageState extends State<DetailPeminjamanPage> {
       
       // Tentukan status baru berdasarkan role dan jabatan
       if (widget.role == 'user' && isManagerDivisi) {
-        // ✅ Manager Divisi mengubah SUBMITTED → APPROVAL_1
         if (currentStatus != 'SUBMITTED') {
           throw Exception('Hanya dapat menyetujui peminjaman dengan status SUBMITTED');
         }
@@ -159,15 +486,28 @@ class _DetailPeminjamanPageState extends State<DetailPeminjamanPage> {
         actionText = 'Disetujui Manager Divisi';
         
       } else if (widget.role == 'operator') {
-        // Operator mengubah APPROVAL_1 → APPROVAL_2
         if (currentStatus != 'APPROVAL_1') {
           throw Exception('Hanya dapat menyetujui peminjaman dengan status APPROVAL_1');
         }
+        
+        // ✅ KHUSUS OPERATOR: Cek apakah kendaraan sudah dipilih
+        if (_bookingData?['vehicleId'] == null || _bookingData?['vehicleId'] == '') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Harap pilih kendaraan terlebih dahulu dengan menekan tombol "Edit Kendaraan"'),
+                backgroundColor: Colors.orange.shade600,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return;
+        }
+        
         newStatus = 'APPROVAL_2';
         actionText = 'Diverifikasi Operator';
         
       } else if (widget.role == 'admin' || widget.role == 'manager_umum') {
-        // ✅ Admin/Manager Umum mengubah APPROVAL_2 → APPROVAL_3
         if (currentStatus != 'APPROVAL_2') {
           throw Exception('Hanya dapat menyetujui peminjaman dengan status APPROVAL_2');
         }
@@ -207,6 +547,39 @@ class _DetailPeminjamanPageState extends State<DetailPeminjamanPage> {
         'note': '$actionText oleh ${widget.userName}',
       });
 
+      // ✅✅✅ KIRIM NOTIFIKASI WA KE APPROVER BERIKUTNYA ✅✅✅
+      if (newStatus == 'APPROVAL_1') {
+        // Setelah Manager Divisi approve, kirim WA ke Operator
+        print('📨 Mengirim notifikasi WA ke Operator...');
+        
+        final success = await ApprovalNotificationService.sendApprovalNotificationToOperator(
+          bookingId: widget.data['id'],
+          bookingData: _bookingData!,
+        );
+        
+        if (success) {
+          print('✅ Notifikasi WA berhasil dikirim ke Operator');
+        } else {
+          print('❌ Gagal mengirim notifikasi WA ke Operator');
+        }
+        
+      } else if (newStatus == 'APPROVAL_2') {
+        // Setelah Operator approve, kirim WA ke Manager Umum
+        print('📨 Mengirim notifikasi WA ke Manager Umum...');
+        
+        final success = await ApprovalNotificationService.sendApprovalNotificationToManagerUmum(
+          bookingId: widget.data['id'],
+          bookingData: _bookingData!,
+        );
+        
+        if (success) {
+          print('✅ Notifikasi WA berhasil dikirim ke Manager Umum');
+        } else {
+          print('❌ Gagal mengirim notifikasi WA ke Manager Umum');
+        }
+      }
+      // ✅✅✅ AKHIR KODE NOTIFIKASI WA ✅✅✅
+
       // Refresh data
       await _loadBookingData();
 
@@ -219,7 +592,6 @@ class _DetailPeminjamanPageState extends State<DetailPeminjamanPage> {
           ),
         );
         
-        // Kembali ke halaman sebelumnya dengan result true
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -238,7 +610,6 @@ class _DetailPeminjamanPageState extends State<DetailPeminjamanPage> {
       }
     }
   }
-
   // Fungsi untuk reject booking
   Future<void> _rejectBooking() async {
     final TextEditingController reasonController = TextEditingController();
@@ -946,11 +1317,10 @@ class _DetailPeminjamanPageState extends State<DetailPeminjamanPage> {
                         // ✅ Ambil status dari newStatus atau status
                         final statusLabel = history['newStatus'] ?? history['status'] ?? '';
                         
-                        // ✅ Tentukan icon berdasarkan action
                         IconData icon;
                         Color iconColor;
                         Color bgColor;
-                        
+
                         if (history['action'] == 'APPROVED') {
                           icon = Icons.check;
                           iconColor = Colors.green;
@@ -967,6 +1337,10 @@ class _DetailPeminjamanPageState extends State<DetailPeminjamanPage> {
                           icon = Icons.check_circle;
                           iconColor = Colors.green;
                           bgColor = Colors.green.shade100;
+                        } else if (history['action'] == 'VEHICLE_CHANGED') {  // ⬅️ TAMBAHKAN INI
+                          icon = Icons.swap_horiz;
+                          iconColor = Colors.orange;
+                          bgColor = Colors.orange.shade100;
                         } else {
                           icon = Icons.info;
                           iconColor = Colors.grey;
@@ -1104,6 +1478,29 @@ class _DetailPeminjamanPageState extends State<DetailPeminjamanPage> {
                                           ],
                                         ),
                                       ],
+                                    if (history['action'] == 'VEHICLE_CHANGED') ...[
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.info_outline,
+                                              size: 12,
+                                              color: Colors.grey.shade500,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Expanded(
+                                              child: Text(
+                                                '${history['oldVehicleName']} → ${history['newVehicleName']}',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.grey.shade600,
+                                                  fontStyle: FontStyle.italic,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -1120,6 +1517,33 @@ class _DetailPeminjamanPageState extends State<DetailPeminjamanPage> {
 
                 // Tombol Aksi
                 if (widget.isApprovalMode) ...[
+                  if (widget.role == 'operator' && status == 'APPROVAL_1') ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: OutlinedButton.icon(
+                        onPressed: _showSelectVehicleDialog,
+                        icon: const Icon(Icons.edit),
+                        label: const Text(
+                          'Edit Kendaraan',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.blue.shade700,
+                          side: BorderSide(color: Colors.blue.shade700, width: 1.5),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  
+                  // Tombol Tolak dan Setujui
                   Row(
                     children: [
                       Expanded(

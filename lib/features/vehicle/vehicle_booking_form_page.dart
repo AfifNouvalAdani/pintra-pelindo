@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../dashboard/dashboard_page.dart';
 import '../vehicle/detail_peminjaman_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/approval_notification_service.dart';
 
 // Custom Time Picker 24 Jam
 class TimePicker24Hour extends StatefulWidget {
@@ -480,6 +481,17 @@ Future<void> _checkExistingBookings() async {
       return;
     }
 
+    if (keperluan == 'DINAS') {
+    if (nomorController.text.trim().isEmpty) {
+      _showSnackBar('Masukkan nomor SPPD');
+      return;
+    }
+    if (nomorController.text.trim().length < 5) {
+      _showSnackBar('Nomor SPPD minimal 5 karakter');
+      return;
+    }
+  }
+
     if (tglPinjam == null || jamPinjam == null) {
       _showSnackBar('Pilih tanggal dan jam pinjam');
       return;
@@ -576,6 +588,25 @@ Future<void> _checkExistingBookings() async {
       final bookingDoc = await FirebaseFirestore.instance
           .collection('vehicle_bookings')
           .add(bookingData);
+      
+        print('📨 Mengirim notifikasi WA ke Manager Divisi...');
+
+        final bookingDataWithId = {
+          'id': bookingDoc.id,
+          ...bookingData,
+          'nipp': userData?['nipp'] ?? '-',
+        };
+
+        final notifSuccess = await ApprovalNotificationService.sendApprovalNotificationToManagerDivisi(
+          bookingId: bookingDoc.id,
+          bookingData: bookingDataWithId,
+        );
+
+        if (notifSuccess) {
+          print('✅ Notifikasi WA berhasil dikirim');
+        } else {
+          print('⚠️ Gagal mengirim notifikasi WA');
+        }
 
       // Prepare data untuk halaman detail
       final uiData = {

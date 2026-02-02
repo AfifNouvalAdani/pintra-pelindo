@@ -39,7 +39,12 @@ class _FormPengembalianKendaraanPageState
 
   bool p3k = true;
   bool dongkrak = true;
-  bool segitiga = true;
+  bool apar = true;
+  bool segitigaBahaya = true;
+  bool banSerep = true;
+
+  Map<String, dynamic>? _kondisiAwalData;
+  List<String> _kelengkapanKendaraan = [];
 
   final TextEditingController uraianKondisiController =
       TextEditingController();
@@ -49,10 +54,52 @@ class _FormPengembalianKendaraanPageState
 
   bool _isUploading = false;
   bool _hasPhoto = false;
+  File? _photoFile;
+  String? _photoBase64;
+
+
+  @override
+void initState() {
+  super.initState();
+  _loadKondisiAwal();
+}
+
+Future<void> _loadKondisiAwal() async {
+  try {
+    final bookingDoc = await FirebaseFirestore.instance
+        .collection('vehicle_bookings')
+        .doc(widget.bookingId)
+        .get();
+    
+    if (bookingDoc.exists) {
+      final data = bookingDoc.data();
+      final kondisiAwal = data?['kondisiAwal'] as Map<String, dynamic>?;
+      
+      setState(() {
+        _kondisiAwalData = kondisiAwal;
+        
+        // 🔥 REVISI: Load kelengkapan items dari kondisi awal
+        if (kondisiAwal != null && kondisiAwal['kelengkapanItems'] != null) {
+          final kelengkapanItems = kondisiAwal['kelengkapanItems'] as List<dynamic>;
+          _kelengkapanKendaraan = kelengkapanItems.map((e) => e.toString()).toList();
+          
+          // Set checkbox sesuai data awal
+          p3k = _kelengkapanKendaraan.contains('P3K');
+          dongkrak = _kelengkapanKendaraan.contains('Dongkrak');
+          apar = _kelengkapanKendaraan.contains('Apar');
+          segitigaBahaya = _kelengkapanKendaraan.contains('Segitiga Bahaya');
+          banSerep = _kelengkapanKendaraan.contains('ban serep');
+        }
+      });
+    }
+  } catch (e) {
+    print('Error loading kondisi awal: $e');
+  }
+}
 
   // Fungsi untuk menghitung persentase kelengkapan
   double _calculateCompleteness() {
-    final items = [p3k, dongkrak, segitiga];
+    final items = [p3k, dongkrak, apar, segitigaBahaya, banSerep];
     final completed = items.where((item) => item == true).length;
     return completed / items.length;
   }
@@ -141,8 +188,8 @@ class _FormPengembalianKendaraanPageState
       return;
     }
 
-    if (kondisi == 'Tidak Baik' && uraianKondisiController.text.isEmpty) {
-      _showSnackBar('Uraikan kondisi kendaraan saat pengembalian');
+    if (kondisi == 'Tidak Seperti Awal Peminjaman' && uraianKondisiController.text.isEmpty) {
+      _showSnackBar('Uraikan perubahan kondisi kendaraan');
       return;
     }
 
@@ -151,14 +198,18 @@ class _FormPengembalianKendaraanPageState
       return;
     }
 
-    if (kelengkapan == 'Tidak Lengkap') {
-      if (p3k && dongkrak && segitiga) {
-        _showSnackBar('Pilih kelengkapan yang masih ada saat pengembalian');
+    if (kelengkapan == 'Tidak Seperti Awal Peminjaman') {
+      // 🔥 FIX: Cek apakah ADA yang unchecked (kehilangan)
+      // Jika TIDAK ADA yang unchecked, berarti semua masih ada = salah pilih opsi
+      final adaYangHilang = !p3k || !dongkrak || !apar || !segitigaBahaya || !banSerep;
+      
+      if (!adaYangHilang) {
+        _showSnackBar('Semua kelengkapan masih ada. Pilih "Seperti Awal Peminjaman" atau uncheck item yang hilang');
         return;
       }
 
       if (uraianKelengkapanController.text.isEmpty) {
-        _showSnackBar('Uraikan kronologi kehilangan kelengkapan saat pengembalian');
+        _showSnackBar('Uraikan perubahan kelengkapan');
         return;
       }
     }
@@ -198,39 +249,59 @@ class _FormPengembalianKendaraanPageState
         throw Exception('Peminjaman tidak dalam status ON_GOING');
       }
 
-      // 2️⃣ SIAPKAN DATA KONDISI AKHIR
-      Map<String, dynamic> kondisiAkhirData = {
-        'kondisi': kondisi,
-        'kelengkapan': kelengkapan,
-        'kelengkapanItems': {
-          'p3k': p3k,
-          'dongkrak': dongkrak,
-          'segitiga': segitiga,
-        },
-        'sisaBBM': sisaBBM,
-        'odometerAkhir': odometerValue,
-        'timestamp': Timestamp.now(),
-        'filledBy': widget.userId,
-        'filledByName': widget.userName,
-      };
+      List<String> kelengkapanTersedia = [];
+      if (p3k) kelengkapanTersedia.add('P3K');
+      if (dongkrak) kelengkapanTersedia.add('Dongkrak');
+      if (apar) kelengkapanTersedia.add('Apar');
+      if (segitigaBahaya) kelengkapanTersedia.add('Segitiga Bahaya');
+      if (banSerep) kelengkapanTersedia.add('ban serep');
 
-      // Tambahkan uraian jika kondisi tidak baik
-      if (kondisi == 'Tidak Baik' && uraianKondisiController.text.isNotEmpty) {
-        kondisiAkhirData['uraianKondisi'] = uraianKondisiController.text;
-      }
+      Map<String, dynamic> kondisiAkhirData;
 
-      // Tambahkan uraian jika kelengkapan tidak lengkap
-      if (kelengkapan == 'Tidak Lengkap' && uraianKelengkapanController.text.isNotEmpty) {
-        kondisiAkhirData['uraianKelengkapan'] = uraianKelengkapanController.text;
-      }
+      if (kondisi == 'Seperti Awal Peminjaman' && kelengkapan == 'Seperti Awal Peminjaman') {
+        kondisiAkhirData = Map<String, dynamic>.from(_kondisiAwalData ?? {});
+        kondisiAkhirData['statusPengembalian'] = 'Seperti Awal Peminjaman';
+        kondisiAkhirData['sisaBBM'] = sisaBBM;
+        kondisiAkhirData['odometerAkhir'] = odometerValue;
+        kondisiAkhirData['timestampPengembalian'] = Timestamp.now();
+        kondisiAkhirData['returnedBy'] = widget.userId;
+        kondisiAkhirData['returnedByName'] = widget.userName;
+        
+        if (_photoBase64 != null && _photoBase64!.isNotEmpty) {
+          kondisiAkhirData['fotoPengembalianBase64'] = _photoBase64;
+          kondisiAkhirData['fotoPengembalianTimestamp'] = Timestamp.now();
+        }
+        } else {
+          // Ada perubahan dari kondisi awal
+          kondisiAkhirData = {
+            'statusPengembalian': 'Ada Perubahan',
+            'kondisiAwal': _kondisiAwalData?['kondisi'] ?? 'Tidak Diketahui',
+            'kondisiAkhir': kondisi == 'Tidak Seperti Awal Peminjaman' ? 'Tidak Baik' : (_kondisiAwalData?['kondisi'] ?? 'Baik'),
+            'kelengkapanAwal': _kondisiAwalData?['kelengkapan'] ?? 'Tidak Diketahui',
+            'kelengkapanAkhir': kelengkapan == 'Tidak Seperti Awal Peminjaman' ? 'Tidak Lengkap' : (_kondisiAwalData?['kelengkapan'] ?? 'Lengkap'),
+            'kelengkapanItems': kelengkapanTersedia,
+            'sisaBBM': sisaBBM,
+            'odometerAkhir': odometerValue,
+            'timestampPengembalian': Timestamp.now(),
+            'returnedBy': widget.userId,
+            'returnedByName': widget.userName,
+          };
 
-      // Tambahkan foto sebagai base64 jika ada
-      if (_photoBase64 != null && _photoBase64!.isNotEmpty) {
-        kondisiAkhirData['fotoBase64'] = _photoBase64;
-        kondisiAkhirData['fotoTimestamp'] = Timestamp.now();
-      }
+          if (kondisi == 'Tidak Seperti Awal Peminjaman' && uraianKondisiController.text.isNotEmpty) {
+            kondisiAkhirData['uraianKondisi'] = uraianKondisiController.text;
+          }
 
-      // 3️⃣ UPDATE DOCUMENT VEHICLE_BOOKINGS
+          if (kelengkapan == 'Tidak Seperti Awal Peminjaman' && uraianKelengkapanController.text.isNotEmpty) {
+            kondisiAkhirData['uraianKelengkapan'] = uraianKelengkapanController.text;
+          }
+
+          if (_photoBase64 != null && _photoBase64!.isNotEmpty) {
+            kondisiAkhirData['fotoPengembalianBase64'] = _photoBase64;
+            kondisiAkhirData['fotoPengembalianTimestamp'] = Timestamp.now();
+          }
+        }
+
+      // Update booking
       await FirebaseFirestore.instance
           .collection('vehicle_bookings')
           .doc(widget.bookingId)
@@ -243,16 +314,22 @@ class _FormPengembalianKendaraanPageState
 
       print('✅ Booking updated to DONE');
 
-      // 4️⃣ UPDATE ODOMETER DI COLLECTION VEHICLES
+      // 🔥 REVISI: Update vehicles collection
+      // Gunakan kelengkapan awal jika seperti awal peminjaman, gunakan yang baru jika ada perubahan
+      List<String> kelengkapanFinal = kondisi == 'Seperti Awal Peminjaman' && kelengkapan == 'Seperti Awal Peminjaman'
+          ? (_kondisiAwalData?['kelengkapanItems'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? []
+          : kelengkapanTersedia;
+
       await FirebaseFirestore.instance
           .collection('vehicles')
           .doc(widget.vehicleId)
           .update({
+        'kelengkapan': kelengkapanFinal, // 🔥 Update array kelengkapan
         'odometerTerakhir': odometerValue,
         'updatedAt': Timestamp.now(),
       });
 
-      print('✅ Vehicle odometer updated');
+      print('✅ Vehicle updated');
 
       // 5️⃣ TAMBAHKAN LOG DI APPROVAL_HISTORY
       await FirebaseFirestore.instance
@@ -314,9 +391,6 @@ void _showSuccessDialog() {
     );
   }
 }
-
-File? _photoFile;
-String? _photoBase64;
 
 Future<void> _uploadFoto() async {
   try {
@@ -467,26 +541,26 @@ void _hapusFoto() {
               ),
               const SizedBox(height: 12),
               Text(
-                'Bagaimana kondisi kendaraan saat dikembalikan?',
+                'Apakah kondisi kendaraan sama seperti saat awal peminjaman?',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
                 ),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: kondisi,
-                items: const [
-                  DropdownMenuItem(
-                    value: 'Baik',
-                    child: Text('Baik'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Tidak Baik',
-                    child: Text('Tidak Baik'),
-                  ),
-                ],
-                onChanged: (v) => setState(() => kondisi = v),
+                DropdownButtonFormField<String>(
+                  value: kondisi,
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'Seperti Awal Peminjaman',
+                      child: Text('Seperti Awal Peminjaman'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Tidak Seperti Awal Peminjaman',
+                      child: Text('Tidak Seperti Awal Peminjaman'),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() => kondisi = v),
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -521,7 +595,7 @@ void _hapusFoto() {
                 ),
               ),
 
-              if (kondisi == 'Tidak Baik') ...[
+              if (kondisi == 'Tidak Seperti Awal Peminjaman') ...[
                 const SizedBox(height: 16),
                 Text(
                   'Uraian Kondisi',
@@ -536,7 +610,7 @@ void _hapusFoto() {
                   controller: uraianKondisiController,
                   maxLines: 3,
                   decoration: InputDecoration(
-                    hintText: 'Uraikan kondisi kendaraan saat dikembalikan...',
+                    hintText: 'Uraikan perubahan kondisi kendaraan dari awal peminjaman...',
                     hintStyle: TextStyle(
                       color: Colors.grey.shade500,
                     ),
@@ -705,26 +779,26 @@ void _hapusFoto() {
               ),
               const SizedBox(height: 12),
               Text(
-                'Apakah kelengkapan kendaraan lengkap saat dikembalikan?',
+                'Apakah kelengkapan kendaraan sama seperti saat awal peminjaman?',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
                 ),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: kelengkapan,
-                items: const [
-                  DropdownMenuItem(
-                    value: 'Lengkap',
-                    child: Text('Lengkap'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Tidak Lengkap',
-                    child: Text('Tidak Lengkap'),
-                  ),
-                ],
-                onChanged: (v) => setState(() => kelengkapan = v),
+                DropdownButtonFormField<String>(
+                  value: kelengkapan,
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'Seperti Awal Peminjaman',
+                      child: Text('Seperti Awal Peminjaman'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Tidak Seperti Awal Peminjaman',
+                      child: Text('Tidak Seperti Awal Peminjaman'),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() => kelengkapan = v),
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -759,7 +833,7 @@ void _hapusFoto() {
                 ),
               ),
 
-              if (kelengkapan == 'Tidak Lengkap') ...[
+              if (kelengkapan == 'Tidak Seperti Awal Peminjaman') ...[
                 const SizedBox(height: 24),
 
                 // Checklist Kelengkapan
@@ -826,24 +900,36 @@ void _hapusFoto() {
 
                       // Tiga Item Checklist dalam satu kolom
                       Column(
-                        children: [
-                          _buildChecklistItem(
-                            'P3K',
-                            p3k,
-                            (value) => setState(() => p3k = value ?? false),
-                          ),
-                          const SizedBox(height: 8),
-                          _buildChecklistItem(
-                            'Dongkrak',
-                            dongkrak,
-                            (value) => setState(() => dongkrak = value ?? false),
-                          ),
-                          const SizedBox(height: 8),
-                          _buildChecklistItem(
-                            'Segitiga Darurat',
-                            segitiga,
-                            (value) => setState(() => segitiga = value ?? false),
-                          ),
+                      children: [
+                        _buildChecklistItem(
+                          'P3K',
+                          p3k,
+                          (value) => setState(() => p3k = value ?? false),
+                        ),
+                        const SizedBox(height: 8),
+                        _buildChecklistItem(
+                          'Dongkrak',
+                          dongkrak,
+                          (value) => setState(() => dongkrak = value ?? false),
+                        ),
+                        const SizedBox(height: 8),
+                        _buildChecklistItem(
+                          'Apar',
+                          apar,
+                          (value) => setState(() => apar = value ?? false),
+                        ),
+                        const SizedBox(height: 8),
+                        _buildChecklistItem(
+                          'Segitiga Bahaya',
+                          segitigaBahaya,
+                          (value) => setState(() => segitigaBahaya = value ?? false),
+                        ),
+                        const SizedBox(height: 8),
+                        _buildChecklistItem(
+                          'Ban Serep',
+                          banSerep,
+                          (value) => setState(() => banSerep = value ?? false),
+                        ),
 
                           const SizedBox(height: 16),
 

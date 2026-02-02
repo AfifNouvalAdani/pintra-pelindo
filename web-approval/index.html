@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Approval Peminjaman Kendaraan</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: #f5f5f5; 
+            padding: 20px; 
+            line-height: 1.6; 
+        }
+        .container { 
+            max-width: 600px; 
+            margin: 0 auto; 
+            background: white; 
+            border-radius: 16px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1); 
+            padding: 30px; 
+        }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { color: #2c3e50; margin-bottom: 8px; }
+        .header p { color: #7f8c8d; }
+        .loading, .error { text-align: center; padding: 40px; }
+        .spinner { 
+            border: 4px solid #f3f3f3; 
+            border-top: 4px solid #3498db; 
+            border-radius: 50%; 
+            width: 40px; 
+            height: 40px; 
+            animation: spin 1s linear infinite; 
+            margin: 0 auto 20px; 
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .booking-detail { 
+            background: #f8f9fa; 
+            padding: 20px; 
+            border-radius: 12px; 
+            margin-bottom: 30px; 
+            border-left: 4px solid #3498db; 
+        }
+        .detail-item { margin-bottom: 15px; }
+        .detail-label { 
+            font-size: 13px; 
+            color: #6c757d; 
+            margin-bottom: 4px; 
+            font-weight: 500; 
+        }
+        .detail-value { 
+            font-size: 15px; 
+            color: #212529; 
+            font-weight: 500; 
+        }
+        .buttons { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 15px; 
+            margin-top: 30px; 
+        }
+        button { 
+            padding: 16px; 
+            border: none; 
+            border-radius: 12px; 
+            font-size: 16px; 
+            font-weight: 600; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+        }
+        .btn-approve { 
+            background: #2ecc71; 
+            color: white; 
+        }
+        .btn-approve:hover { background: #27ae60; }
+        .btn-reject { 
+            background: #e74c3c; 
+            color: white; 
+        }
+        .btn-reject:hover { background: #c0392b; }
+        .status-badge { 
+            display: inline-block; 
+            padding: 6px 12px; 
+            border-radius: 20px; 
+            font-size: 14px; 
+            font-weight: 600; 
+            margin-bottom: 20px; 
+        }
+        .status-pending { background: #fff3cd; color: #856404; }
+        .status-approved { background: #d4edda; color: #155724; }
+        .status-rejected { background: #f8d7da; color: #721c24; }
+        .login-form { 
+            background: white; 
+            padding: 30px; 
+            border-radius: 12px; 
+            max-width: 400px; 
+            margin: 50px auto; 
+        }
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            margin-bottom: 15px; 
+            border: 1px solid #ddd; 
+            border-radius: 8px; 
+            font-size: 16px; 
+        }
+        .btn-login { 
+            width: 100%; 
+            background: #3498db; 
+            color: white; 
+        }
+        .btn-login:hover { background: #2980b9; }
+        @media (max-width: 600px) {
+            .container { padding: 20px; }
+            .buttons { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <!-- Konten akan di-load via JS -->
+    </div>
+
+    <script>
+        // Firebase Config
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Inisialisasi Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        class ApprovalWebApp {
+            constructor() {
+                this.bookingId = null;
+                this.token = null;
+                this.bookingData = null;
+                this.user = null;
+                
+                this.init();
+            }
+
+            async init() {
+                // Ambil parameter dari URL
+                const urlParams = new URLSearchParams(window.location.search);
+                this.bookingId = urlParams.get('bookingId');
+                this.token = urlParams.get('token');
+
+                if (!this.bookingId || !this.token) {
+                    this.showError('Link tidak valid. Parameter tidak lengkap.');
+                    return;
+                }
+
+                this.renderLoading();
+
+                try {
+                    // 1. Validasi token via API (buat Cloud Function untuk ini)
+                    const isValid = await this.validateToken(this.token);
+                    
+                    if (!isValid) {
+                        this.showError('Link tidak valid atau sudah kadaluarsa');
+                        return;
+                    }
+
+                    // 2. Cek login status
+                    await this.handleAuth();
+
+                } catch (error) {
+                    this.showError(`Terjadi kesalahan: ${error.message}`);
+                }
+            }
+
+            async validateToken(token) {
+                // Panggil Cloud Function untuk validasi token
+                const response = await fetch(`YOUR_CLOUD_FUNCTION_URL/validateToken`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+                
+                const data = await response.json();
+                return data.valid;
+            }
+
+            async handleAuth() {
+                // Cek apakah sudah login
+                auth.onAuthStateChanged(async (user) => {
+                    if (user) {
+                        this.user = user;
+                        await this.loadBookingData();
+                    } else {
+                        this.showLoginForm();
+                    }
+                });
+            }
+
+            async loadBookingData() {
+                try {
+                    // Ambil data booking dari Firestore
+                    const bookingDoc = await db.collection('vehicle_bookings')
+                        .doc(this.bookingId)
+                        .get();
+
+                    if (!bookingDoc.exists) {
+                        this.showError('Data peminjaman tidak ditemukan');
+                        return;
+                    }
+
+                    this.bookingData = {
+                        id: bookingDoc.id,
+                        ...bookingDoc.data()
+                    };
+
+                    this.renderApprovalPage();
+                    
+                } catch (error) {
+                    this.showError(`Gagal memuat data: ${error.message}`);
+                }
+            }
+
+            async approveBooking() {
+                try {
+                    // Kirim approval ke Cloud Function
+                    const response = await fetch(`YOUR_CLOUD_FUNCTION_URL/approveBooking`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            bookingId: this.bookingId,
+                            token: this.token,
+                            userId: this.user.uid,
+                            action: 'APPROVE'
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.renderSuccess('Peminjaman berhasil disetujui!');
+                    } else {
+                        this.showError(`Gagal: ${data.message}`);
+                    }
+                    
+                } catch (error) {
+                    this.showError(`Gagal menyetujui: ${error.message}`);
+                }
+            }
+
+            async rejectBooking() {
+                const reason = prompt('Masukkan alasan penolakan:');
+                if (!reason) return;
+
+                try {
+                    const response = await fetch(`YOUR_CLOUD_FUNCTION_URL/rejectBooking`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            bookingId: this.bookingId,
+                            token: this.token,
+                            userId: this.user.uid,
+                            action: 'REJECT',
+                            reason: reason
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.renderSuccess('Peminjaman berhasil ditolak!');
+                    } else {
+                        this.showError(`Gagal: ${data.message}`);
+                    }
+                    
+                } catch (error) {
+                    this.showError(`Gagal menolak: ${error.message}`);
+                }
+            }
+
+            async handleLogin(email, password) {
+                try {
+                    await auth.signInWithEmailAndPassword(email, password);
+                    // Auth state change akan otomatis trigger loadBookingData
+                } catch (error) {
+                    alert(`Login gagal: ${error.message}`);
+                }
+            }
+
+            renderLoading() {
+                document.getElementById('app').innerHTML = `
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Memvalidasi link approval...</p>
+                    </div>
+                `;
+            }
+
+            renderApprovalPage() {
+                const booking = this.bookingData;
+                const waktuPinjam = booking.waktuPinjam ? new Date(booking.waktuPinjam.seconds * 1000) : null;
+                const waktuKembali = booking.waktuKembali ? new Date(booking.waktuKembali.seconds * 1000) : null;
+
+                document.getElementById('app').innerHTML = `
+                    <div class="header">
+                        <h1>🚗 Approval Peminjaman Kendaraan</h1>
+                        <p>Silakan tinjau dan berikan persetujuan</p>
+                    </div>
+
+                    <div class="status-badge status-pending">Menunggu Persetujuan</div>
+
+                    <div class="booking-detail">
+                        <div class="detail-item">
+                            <div class="detail-label">ID Pemesanan</div>
+                            <div class="detail-value">${booking.id}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Nama Peminjam</div>
+                            <div class="detail-value">${booking.namaPeminjam}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Divisi</div>
+                            <div class="detail-value">${booking.divisi}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Kendaraan</div>
+                            <div class="detail-value">${booking.vehicle?.nama || '-'} (${booking.vehicle?.platNomor || '-'})</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Tujuan</div>
+                            <div class="detail-value">${booking.tujuan}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Keperluan</div>
+                            <div class="detail-value">${booking.keperluan}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Waktu Pinjam</div>
+                            <div class="detail-value">${waktuPinjam ? waktuPinjam.toLocaleDateString('id-ID') : '-'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Waktu Kembali</div>
+                            <div class="detail-value">${waktuKembali ? waktuKembali.toLocaleDateString('id-ID') : '-'}</div>
+                        </div>
+                    </div>
+
+                    <div class="buttons">
+                        <button class="btn-reject" onclick="app.rejectBooking()">Tolak</button>
+                        <button class="btn-approve" onclick="app.approveBooking()">Setujui</button>
+                    </div>
+
+                    <p style="margin-top: 20px; font-size: 12px; color: #999; text-align: center;">
+                        ⚠️ Hanya user yang berwenang yang dapat melakukan approval
+                    </p>
+                `;
+            }
+
+            showLoginForm() {
+                document.getElementById('app').innerHTML = `
+                    <div class="login-form">
+                        <h2 style="margin-bottom: 20px; text-align: center;">Login untuk Approval</h2>
+                        <input type="email" id="email" placeholder="Email" />
+                        <input type="password" id="password" placeholder="Password" />
+                        <button class="btn-login" onclick="app.login()">Login</button>
+                    </div>
+                `;
+            }
+
+            login() {
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                this.handleLogin(email, password);
+            }
+
+            renderSuccess(message) {
+                document.getElementById('app').innerHTML = `
+                    <div style="text-align: center; padding: 50px 20px;">
+                        <div style="font-size: 60px; color: #2ecc71; margin-bottom: 20px;">✓</div>
+                        <h2 style="color: #2ecc71; margin-bottom: 10px;">Berhasil!</h2>
+                        <p style="color: #7f8c8d; margin-bottom: 30px;">${message}</p>
+                        <p style="color: #999; font-size: 14px;">Halaman ini dapat ditutup</p>
+                    </div>
+                `;
+            }
+
+            showError(message) {
+                document.getElementById('app').innerHTML = `
+                    <div class="error">
+                        <div style="font-size: 60px; color: #e74c3c; margin-bottom: 20px;">✗</div>
+                        <h3 style="color: #e74c3c; margin-bottom: 10px;">Terjadi Kesalahan</h3>
+                        <p style="color: #7f8c8d;">${message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Inisialisasi app
+        const app = new ApprovalWebApp();
+        window.app = app;
+    </script>
+</body>
+</html>
