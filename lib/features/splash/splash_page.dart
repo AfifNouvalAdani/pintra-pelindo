@@ -1,24 +1,7 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 
-class SplashPage extends StatefulWidget {
+class SplashPage extends StatelessWidget {
   const SplashPage({super.key});
-
-  @override
-  State<SplashPage> createState() => _SplashPageState();
-}
-
-class _SplashPageState extends State<SplashPage> {
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Delay 3 detik lalu pindah halaman
-    Timer(const Duration(seconds: 5), () {
-      Navigator.pushReplacementNamed(context, '/login');
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +11,6 @@ class _SplashPageState extends State<SplashPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-
             // Logo
             Image.asset(
               'assets/images/logo-pintra.png',
@@ -37,7 +19,20 @@ class _SplashPageState extends State<SplashPage> {
 
             const SizedBox(height: 24),
 
-            const SizedBox(height: 8),
+            // Loading indicator
+            CircularProgressIndicator(
+              color: Colors.blue.shade700,
+            ),
+
+            const SizedBox(height: 16),
+            
+            Text(
+              'Memuat...',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+            ),
           ],
         ),
       ),

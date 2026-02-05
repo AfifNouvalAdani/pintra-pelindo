@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // ✅ TAMBAHKAN
+import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ TAMBAHKAN
 import 'firebase_options.dart';
 import 'features/splash/splash_page.dart';
 import 'features/auth/login_page.dart';
+import 'features/dashboard/dashboard_page.dart'; // ✅ TAMBAHKAN
 import 'package:app_links/app_links.dart';
 import 'dart:async';
 import 'features/admin/deep_link_approval_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'features/admin/public_approval_page.dart';
-import 'package:intl/date_symbol_data_local.dart'; // ✅ TAMBAHKAN INI
+import 'package:intl/date_symbol_data_local.dart';
 
-// ✅ CONDITIONAL IMPORT - hanya import dart:html jika di web
 import 'web_url_helper_stub.dart'
     if (dart.library.html) 'web_url_helper_web.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // ✅ TAMBAHKAN: Initialize date formatting untuk Indonesia
   await initializeDateFormatting('id_ID', null);
   
   await Firebase.initializeApp(
@@ -109,6 +110,7 @@ class _PintraAppState extends State<PintraApp> {
 
   // ✅ FUNGSI untuk cek initial web route
   Widget _getInitialPage() {
+    // Prioritas 1: Cek deep link approval (untuk web)
     if (kIsWeb) {
       try {
         final currentUrl = getCurrentUrl();
@@ -126,7 +128,7 @@ class _PintraAppState extends State<PintraApp> {
           print('🔑 Found token: $token');
           
           if (bookingId != null && token != null) {
-            return PublicApprovalPage( // ✅ GANTI INI
+            return PublicApprovalPage(
               bookingId: bookingId,
               token: token,
             );
@@ -137,7 +139,8 @@ class _PintraAppState extends State<PintraApp> {
       }
     }
     
-    return const SplashPage();
+    // ✅ Prioritas 2: Cek status login (untuk halaman normal)
+    return const AuthWrapper();
   }
 
   @override
@@ -168,7 +171,7 @@ class _PintraAppState extends State<PintraApp> {
             
             if (bookingId != null && token != null) {
               return MaterialPageRoute(
-                builder: (_) => PublicApprovalPage( // ✅ GANTI INI
+                builder: (_) => PublicApprovalPage(
                   bookingId: bookingId,
                   token: token,
                 ),
@@ -181,7 +184,7 @@ class _PintraAppState extends State<PintraApp> {
         switch (settings.name) {
           case '/':
             return MaterialPageRoute(
-              builder: (_) => const SplashPage(),
+              builder: (_) => const AuthWrapper(),
               settings: settings,
             );
           case '/login':
@@ -191,7 +194,7 @@ class _PintraAppState extends State<PintraApp> {
             );
           default:
             return MaterialPageRoute(
-              builder: (_) => const SplashPage(),
+              builder: (_) => const AuthWrapper(),
               settings: settings,
             );
         }
@@ -199,6 +202,91 @@ class _PintraAppState extends State<PintraApp> {
       
       routes: {
         '/login': (context) => const LoginPage(),
+      },
+    );
+  }
+}
+
+// ✅ TAMBAHKAN Widget AuthWrapper
+// ✅ FIX Widget AuthWrapper
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  bool _showSplash = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Tampilkan splash selama 1 detik
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) {
+        setState(() {
+          _showSplash = false;
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Tampilkan splash dulu
+    if (_showSplash) {
+      return const SplashPage();
+    }
+
+    // Setelah splash, cek auth
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // Masih loading auth state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SplashPage();
+        }
+
+        // Jika user sudah login
+        if (snapshot.hasData && snapshot.data != null) {
+          return FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance
+                .collection('users')
+                .doc(snapshot.data!.uid)
+                .get(),
+            builder: (context, userSnapshot) {
+              // Loading user data
+              if (userSnapshot.connectionState == ConnectionState.waiting) {
+                return const SplashPage();
+              }
+
+              // Jika data user tidak ada
+              if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
+                FirebaseAuth.instance.signOut();
+                return const LoginPage();
+              }
+
+              // Ambil data user
+              final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+              final role = userData['role'] ?? 'user';
+              final userName = userData['nama'] ?? 'User';
+              final userId = snapshot.data!.uid;
+              final userDivision = userData['divisi'] ?? '';
+
+              // Ke Dashboard
+              return DashboardPage(
+                role: role,
+                userName: userName,
+                userId: userId,
+                userDivision: userDivision,
+              );
+            },
+          );
+        }
+
+        // ✅ PENTING: Jika user belum login, ke LoginPage (BUKAN SplashPage)
+        return const LoginPage();
       },
     );
   }

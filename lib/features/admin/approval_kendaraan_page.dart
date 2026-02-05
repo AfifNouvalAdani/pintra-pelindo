@@ -238,145 +238,154 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage>
   }
 
   // Load history approval untuk user ini
-  Future<void> _loadHistoryBookings() async {
-    setState(() {
-      _isHistoryLoading = true;
-    });
-    
-    try {
-      // Query untuk mengambil history approval berdasarkan user yang melakukan approval
-      final approvalHistoryQuery = await FirebaseFirestore.instance
-          .collectionGroup('approval_history')
-          .where('userId', isEqualTo: widget.userId)
-          .orderBy('timestamp', descending: true)
-          .get();
+// Load history approval untuk user ini
+Future<void> _loadHistoryBookings() async {
+  setState(() {
+    _isHistoryLoading = true;
+  });
+  
+  try {
+    // Query untuk mengambil history approval berdasarkan user yang melakukan approval
+    final approvalHistoryQuery = await FirebaseFirestore.instance
+        .collectionGroup('approval_history')
+        .where('userId', isEqualTo: widget.userId)
+        .orderBy('timestamp', descending: true)
+        .get();
 
-      final bookingIds = approvalHistoryQuery.docs.map((doc) {
-        final path = doc.reference.path;
-        final parts = path.split('/');
-        return parts[1]; // vehicle_bookings/{bookingId}/approval_history/{docId}
-      }).toSet();
+    final bookingIds = approvalHistoryQuery.docs.map((doc) {
+      final path = doc.reference.path;
+      final parts = path.split('/');
+      return parts[1]; // vehicle_bookings/{bookingId}/approval_history/{docId}
+    }).toSet();
 
-      if (bookingIds.isEmpty) {
-        setState(() {
-          _historyBookings = [];
-          _filteredHistoryBookings = [];
-          _isHistoryLoading = false;
-        });
-        return;
-      }
-
-      // Ambil data booking berdasarkan bookingIds
-      final bookings = await Future.wait(bookingIds.map((bookingId) async {
-        try {
-          final bookingDoc = await FirebaseFirestore.instance
-              .collection('vehicle_bookings')
-              .doc(bookingId)
-              .get();
-
-          if (!bookingDoc.exists) return null;
-
-          final data = bookingDoc.data() as Map<String, dynamic>;
-          
-          // Ambil data kendaraan
-          Map<String, dynamic>? vehicleData;
-          if (data['vehicleId'] != null) {
-            try {
-              final vehicleDoc = await FirebaseFirestore.instance
-                  .collection('vehicles')
-                  .doc(data['vehicleId'])
-                  .get();
-              
-              if (vehicleDoc.exists) {
-                vehicleData = {
-                  'id': vehicleDoc.id,
-                  ...vehicleDoc.data() as Map<String, dynamic>,
-                };
-              }
-            } catch (e) {
-              print('Error fetching vehicle data: $e');
-            }
-          }
-
-          // Ambil history approval untuk booking ini oleh user ini
-          final historyDoc = await FirebaseFirestore.instance
-              .collection('vehicle_bookings')
-              .doc(bookingId)
-              .collection('approval_history')
-              .where('userId', isEqualTo: widget.userId)
-              .orderBy('timestamp', descending: true)
-              .limit(1)
-              .get();
-
-          final historyData = historyDoc.docs.isNotEmpty ? 
-              historyDoc.docs.first.data() : null;
-
-          final waktuPinjam = data['waktuPinjam'] is Timestamp
-              ? (data['waktuPinjam'] as Timestamp).toDate()
-              : null;
-          final waktuKembali = data['waktuKembali'] is Timestamp
-              ? (data['waktuKembali'] as Timestamp).toDate()
-              : null;
-          final createdAt = data['createdAt'] is Timestamp
-              ? (data['createdAt'] as Timestamp).toDate()
-              : DateTime.now();
-
-          return {
-            'id': bookingId,
-            'bookingId': bookingId,
-            'title': 'Peminjaman ${data['tujuan'] ?? '-'}',
-            'kendaraan': data['vehicle'] != null 
-                ? (data['vehicle'] as Map<String, dynamic>)['nama'] ?? 'Kendaraan'
-                : vehicleData?['nama'] ?? 'Kendaraan',
-            'platNomor': data['vehicle'] != null 
-                ? (data['vehicle'] as Map<String, dynamic>)['platNomor'] ?? '-'
-                : vehicleData?['platNomor'] ?? '-',
-            'tujuan': data['tujuan'] ?? '-',
-            'peminjam': data['namaPeminjam'] ?? 'Peminjam',
-            'peminjamId': data['peminjamId'] ?? '',
-            'divisi': data['divisi'] ?? '-',
-            'status': data['status'] ?? 'SUBMITTED',
-            'statusText': _getStatusText(data['status'] ?? 'SUBMITTED'),
-            'historyAction': historyData?['action'] ?? 'UNKNOWN',
-            'historyNote': historyData?['note'] ?? '',
-            'historyTimestamp': historyData?['timestamp'],
-            'tanggal': createdAt,
-            'jam': DateFormat('HH:mm').format(createdAt),
-            'keperluan': data['keperluan'] ?? '-',
-            'nomorSurat': data['nomorSurat'] ?? '-',
-            'alasan': data['alasan'] ?? '-',
-            'tglPinjam': waktuPinjam != null ? DateFormat('dd MMM yyyy').format(waktuPinjam) : '-',
-            'jamPinjam': waktuPinjam != null ? DateFormat('HH:mm').format(waktuPinjam) : '-',
-            'tglKembali': waktuKembali != null ? DateFormat('dd MMM yyyy').format(waktuKembali) : '-',
-            'jamKembali': waktuKembali != null ? DateFormat('HH:mm').format(waktuKembali) : '-',
-            'createdAt': createdAt,
-            'waktuPinjam': waktuPinjam,
-            'waktuKembali': waktuKembali,
-            'vehicleId': data['vehicleId'],
-            'vehicleData': vehicleData,
-            'bookingData': data,
-          };
-        } catch (e) {
-          print('Error loading booking $bookingId: $e');
-          return null;
-        }
-      }));
-
-      final validBookings = bookings.where((b) => b != null).cast<Map<String, dynamic>>().toList();
-
+    if (bookingIds.isEmpty) {
       setState(() {
-        _historyBookings = validBookings;
-        _filteredHistoryBookings = List.from(validBookings);
+        _historyBookings = [];
+        _filteredHistoryBookings = [];
         _isHistoryLoading = false;
       });
-
-    } catch (e) {
-      print('Error loading history bookings: $e');
-      setState(() {
-        _isHistoryLoading = false;
-      });
+      return;
     }
+
+    // Ambil data booking berdasarkan bookingIds
+    final bookings = await Future.wait(bookingIds.map((bookingId) async {
+      try {
+        final bookingDoc = await FirebaseFirestore.instance
+            .collection('vehicle_bookings')
+            .doc(bookingId)
+            .get();
+
+        if (!bookingDoc.exists) return null;
+
+        final data = bookingDoc.data() as Map<String, dynamic>;
+        
+        // Ambil data kendaraan
+        Map<String, dynamic>? vehicleData;
+        if (data['vehicleId'] != null) {
+          try {
+            final vehicleDoc = await FirebaseFirestore.instance
+                .collection('vehicles')
+                .doc(data['vehicleId'])
+                .get();
+            
+            if (vehicleDoc.exists) {
+              vehicleData = {
+                'id': vehicleDoc.id,
+                ...vehicleDoc.data() as Map<String, dynamic>,
+              };
+            }
+          } catch (e) {
+            print('Error fetching vehicle data: $e');
+          }
+        }
+
+        // ✅ PERBAIKAN: Ambil SEMUA history approval untuk booking ini oleh user ini
+        final historyDocs = await FirebaseFirestore.instance
+            .collection('vehicle_bookings')
+            .doc(bookingId)
+            .collection('approval_history')
+            .where('userId', isEqualTo: widget.userId)
+            .orderBy('timestamp', descending: true)
+            .get();
+
+        // ✅ Ambil history approval terakhir yang dilakukan user
+        final historyData = historyDocs.docs.isNotEmpty ? 
+            historyDocs.docs.first.data() : null;
+
+        final waktuPinjam = data['waktuPinjam'] is Timestamp
+            ? (data['waktuPinjam'] as Timestamp).toDate()
+            : null;
+        final waktuKembali = data['waktuKembali'] is Timestamp
+            ? (data['waktuKembali'] as Timestamp).toDate()
+            : null;
+        final createdAt = data['createdAt'] is Timestamp
+            ? (data['createdAt'] as Timestamp).toDate()
+            : DateTime.now();
+
+        // ✅ Gunakan timestamp dari history untuk sorting
+        final historyTimestamp = historyData?['timestamp'] is Timestamp
+            ? (historyData!['timestamp'] as Timestamp).toDate()
+            : createdAt;
+
+        return {
+          'id': bookingId,
+          'bookingId': bookingId,
+          'title': 'Peminjaman ${data['tujuan'] ?? '-'}',
+          'kendaraan': data['vehicle'] != null 
+              ? (data['vehicle'] as Map<String, dynamic>)['nama'] ?? 'Kendaraan'
+              : vehicleData?['nama'] ?? 'Kendaraan',
+          'platNomor': data['vehicle'] != null 
+              ? (data['vehicle'] as Map<String, dynamic>)['platNomor'] ?? '-'
+              : vehicleData?['platNomor'] ?? '-',
+          'tujuan': data['tujuan'] ?? '-',
+          'peminjam': data['namaPeminjam'] ?? 'Peminjam',
+          'peminjamId': data['peminjamId'] ?? '',
+          'divisi': data['divisi'] ?? '-',
+          'status': data['status'] ?? 'SUBMITTED',
+          'statusText': _getStatusText(data['status'] ?? 'SUBMITTED'),
+          'historyAction': historyData?['action'] ?? 'UNKNOWN',
+          'historyNote': historyData?['note'] ?? '',
+          'historyTimestamp': historyData?['timestamp'],
+          'historyOldStatus': historyData?['oldStatus'] ?? '',
+          'historyNewStatus': historyData?['newStatus'] ?? '',
+          'historyReason': historyData?['reason'] ?? '', // ✅ Untuk rejection reason
+          'tanggal': historyTimestamp, // ✅ Gunakan timestamp history
+          'jam': DateFormat('HH:mm').format(historyTimestamp),
+          'keperluan': data['keperluan'] ?? '-',
+          'nomorSurat': data['nomorSurat'] ?? '-',
+          'alasan': data['alasan'] ?? '-',
+          'tglPinjam': waktuPinjam != null ? DateFormat('dd MMM yyyy').format(waktuPinjam) : '-',
+          'jamPinjam': waktuPinjam != null ? DateFormat('HH:mm').format(waktuPinjam) : '-',
+          'tglKembali': waktuKembali != null ? DateFormat('dd MMM yyyy').format(waktuKembali) : '-',
+          'jamKembali': waktuKembali != null ? DateFormat('HH:mm').format(waktuKembali) : '-',
+          'createdAt': createdAt,
+          'waktuPinjam': waktuPinjam,
+          'waktuKembali': waktuKembali,
+          'vehicleId': data['vehicleId'],
+          'vehicleData': vehicleData,
+          'bookingData': data,
+        };
+      } catch (e) {
+        print('Error loading booking $bookingId: $e');
+        return null;
+      }
+    }));
+
+    final validBookings = bookings.where((b) => b != null).cast<Map<String, dynamic>>().toList();
+
+    setState(() {
+      _historyBookings = validBookings;
+      _filteredHistoryBookings = List.from(validBookings);
+      _isHistoryLoading = false;
+    });
+
+  } catch (e) {
+    print('Error loading history bookings: $e');
+    setState(() {
+      _isHistoryLoading = false;
+    });
   }
+}
 
   void _applyFilters() {
     List<Map<String, dynamic>> result = List.from(_bookings);
@@ -406,28 +415,28 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage>
     });
   }
 
-  void _applyHistoryFilters() {
-    List<Map<String, dynamic>> result = List.from(_historyBookings);
+void _applyHistoryFilters() {
+  List<Map<String, dynamic>> result = List.from(_historyBookings);
 
-    // Sort history
-    if (sortOrder == 'terbaru') {
-      result.sort((a, b) {
-        final aDate = a['createdAt'] as DateTime?;
-        final bDate = b['createdAt'] as DateTime?;
-        return (bDate ?? DateTime(1970)).compareTo(aDate ?? DateTime(1970));
-      });
-    } else {
-      result.sort((a, b) {
-        final aDate = a['createdAt'] as DateTime?;
-        final bDate = b['createdAt'] as DateTime?;
-        return (aDate ?? DateTime(1970)).compareTo(bDate ?? DateTime(1970));
-      });
-    }
-
-    setState(() {
-      _filteredHistoryBookings = result;
+  // ✅ Sort berdasarkan historyTimestamp (waktu approval dilakukan)
+  if (sortOrder == 'terbaru') {
+    result.sort((a, b) {
+      final aDate = a['tanggal'] as DateTime?; // sudah diset ke historyTimestamp
+      final bDate = b['tanggal'] as DateTime?;
+      return (bDate ?? DateTime(1970)).compareTo(aDate ?? DateTime(1970));
+    });
+  } else {
+    result.sort((a, b) {
+      final aDate = a['tanggal'] as DateTime?;
+      final bDate = b['tanggal'] as DateTime?;
+      return (aDate ?? DateTime(1970)).compareTo(bDate ?? DateTime(1970));
     });
   }
+
+  setState(() {
+    _filteredHistoryBookings = result;
+  });
+}
 
   void _resetFilters() {
     setState(() {
@@ -692,7 +701,6 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage>
     }
   }
 
-  // Navigate to detail
   void _navigateToDetail(Map<String, dynamic> item, bool isHistory) {
     Navigator.push(
       context,
@@ -715,6 +723,7 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage>
             'status': item['status'],
             'waktuPinjam': item['waktuPinjam'],
             'waktuKembali': item['waktuKembali'],
+            'vehicleId': item['vehicleId'], // ✅ Tambahkan ini
           },
           approvalStep: _getApprovalStep(item['status']),
           isApprovalMode: !isHistory && _canApprove(item['status']),
@@ -1337,176 +1346,249 @@ class _ApprovalKendaraanPageState extends State<ApprovalKendaraanPage>
     );
   }
 
-  Widget _buildApprovalCard(Map<String, dynamic> item, bool isHistory) {
-    final status = item['status'];
-    final statusText = item['statusText'];
-    final statusColor = _getStatusColor(status);
-    final canApprove = !isHistory && _canApprove(status);
-    final canReject = !isHistory && _canApprove(status);
-    final historyAction = item['historyAction'] ?? 'APPROVED';
-    final historyNote = item['historyNote'] ?? '';
+Widget _buildApprovalCard(Map<String, dynamic> item, bool isHistory) {
+  final status = item['status'];
+  final statusText = item['statusText'];
+  final statusColor = _getStatusColor(status);
+  final canApprove = !isHistory && _canApprove(status);
+  final canReject = !isHistory && _canApprove(status);
+  final historyAction = item['historyAction'] ?? 'APPROVED';
+  final historyNote = item['historyNote'] ?? '';
+  final historyOldStatus = item['historyOldStatus'] ?? '';
+  final historyNewStatus = item['historyNewStatus'] ?? '';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade100,
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: InkWell(
-        onTap: () => _navigateToDetail(item, isHistory),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header dengan status
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    _getStatusIcon(status),
-                    color: statusColor,
-                    size: 20,
-                  ),
+  // ✅ Tentukan warna badge berdasarkan action history
+  Color historyBadgeColor = statusColor;
+  String historyBadgeText = statusText;
+  
+  if (isHistory) {
+    if (historyAction == 'REJECTED') {
+      historyBadgeColor = Colors.red;
+      historyBadgeText = 'Ditolak';
+    } else if (historyAction == 'APPROVED') {
+      historyBadgeColor = Colors.green;
+      historyBadgeText = 'Disetujui';
+    } else if (historyAction == 'VEHICLE_CHANGED') {
+      historyBadgeColor = Colors.orange;
+      historyBadgeText = 'Kendaraan Diubah';
+    }
+  }
+
+  return Container(
+    margin: const EdgeInsets.only(bottom: 16),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: Colors.grey.shade200),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.grey.shade100,
+          blurRadius: 20,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: InkWell(
+      onTap: () => _navigateToDetail(item, isHistory),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header dengan status
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: (isHistory ? historyBadgeColor : statusColor).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${item['bookingId'].substring(0, 8).toUpperCase()}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${item['kendaraan']} - ${item['platNomor']}',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade900,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${DateFormat('dd/MM/yyyy').format(item['tanggal'])} • ${item['jam']}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
-                    ],
-                  ),
+                child: Icon(
+                  isHistory && historyAction == 'REJECTED' 
+                      ? Icons.cancel
+                      : isHistory && historyAction == 'APPROVED'
+                          ? Icons.check_circle
+                          : _getStatusIcon(status),
+                  color: isHistory ? historyBadgeColor : statusColor,
+                  size: 20,
                 ),
-                Container(
-                  constraints: const BoxConstraints(maxWidth: 100),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: statusColor.withOpacity(0.2)),
-                  ),
-                  child: Text(
-                    isHistory && historyAction == 'REJECTED' ? 'Ditolak' : statusText,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: isHistory && historyAction == 'REJECTED' ? Colors.red : statusColor,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${item['bookingId'].substring(0, 8).toUpperCase()}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 2,
+                    const SizedBox(height: 2),
+                    Text(
+                      '${item['kendaraan']} - ${item['platNomor']}',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${DateFormat('dd/MM/yyyy').format(item['tanggal'])} • ${item['jam']}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                constraints: const BoxConstraints(maxWidth: 100),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: (isHistory ? historyBadgeColor : statusColor).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: (isHistory ? historyBadgeColor : statusColor).withOpacity(0.2),
                   ),
                 ),
+                child: Text(
+                  isHistory ? historyBadgeText : statusText,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: isHistory ? historyBadgeColor : statusColor,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 2,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+          Divider(color: Colors.grey.shade200),
+          const SizedBox(height: 12),
+
+          // ✅ History note dengan info lebih detail
+          if (isHistory && historyNote.isNotEmpty)
+            Column(
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      historyAction == 'REJECTED' 
+                          ? Icons.close 
+                          : historyAction == 'APPROVED'
+                              ? Icons.check
+                              : Icons.info_outline,
+                      size: 16,
+                      color: historyAction == 'REJECTED' 
+                          ? Colors.red 
+                          : historyAction == 'APPROVED'
+                              ? Colors.green
+                              : Colors.blue,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            historyNote,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey.shade800,
+                            ),
+                          ),
+                          // ✅ Tampilkan alasan jika ditolak
+                          if (historyAction == 'REJECTED' && item['historyReason'] != null && item['historyReason'].toString().isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.red.shade200),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    Icons.warning_amber_rounded,
+                                    size: 14,
+                                    color: Colors.red.shade700,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      'Alasan: ${item['historyReason']}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.red.shade700,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
               ],
             ),
 
-            const SizedBox(height: 12),
-            Divider(color: Colors.grey.shade200),
-            const SizedBox(height: 12),
+          // Detail Peminjaman
+          _buildDetailRow(
+            icon: Icons.person_outline_rounded,
+            label: 'Peminjam',
+            value: item['peminjam'],
+          ),
+          const SizedBox(height: 8),
+          _buildDetailRow(
+            icon: Icons.business_rounded,
+            label: 'Divisi',
+            value: item['divisi'],
+          ),
+          const SizedBox(height: 8),
+          _buildDetailRow(
+            icon: Icons.directions_car_rounded,
+            label: 'Kendaraan',
+            value: '${item['kendaraan']} (${item['platNomor']})',
+          ),
+          const SizedBox(height: 8),
+          _buildDetailRow(
+            icon: Icons.location_on_rounded,
+            label: 'Tujuan',
+            value: item['tujuan'],
+          ),
 
-            // History note jika ada
-            if (isHistory && historyNote.isNotEmpty)
-              Column(
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        historyAction == 'REJECTED' ? Icons.close : Icons.check,
-                        size: 16,
-                        color: historyAction == 'REJECTED' ? Colors.red : Colors.green,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          historyNote,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                ],
-              ),
+          const SizedBox(height: 16),
 
-            // Detail Peminjaman
-            _buildDetailRow(
-              icon: Icons.person_outline_rounded,
-              label: 'Peminjam',
-              value: item['peminjam'],
-            ),
-            const SizedBox(height: 8),
-            _buildDetailRow(
-              icon: Icons.business_rounded,
-              label: 'Divisi',
-              value: item['divisi'],
-            ),
-            const SizedBox(height: 8),
-            _buildDetailRow(
-              icon: Icons.directions_car_rounded,
-              label: 'Kendaraan',
-              value: '${item['kendaraan']} (${item['platNomor']})',
-            ),
-            const SizedBox(height: 8),
-            _buildDetailRow(
-              icon: Icons.location_on_rounded,
-              label: 'Tujuan',
-              value: item['tujuan'],
-            ),
-
-            const SizedBox(height: 16),
-
-            // Tombol Aksi (hanya untuk yang menunggu approval)
-            if (!isHistory && (canApprove || canReject))
-              _buildActionButtons(item, canApprove, canReject),
-          ],
-        ),
+          // Tombol Aksi (hanya untuk yang menunggu approval)
+          if (!isHistory && (canApprove || canReject))
+            _buildActionButtons(item, canApprove, canReject),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildActionButtons(Map<String, dynamic> item, bool canApprove, bool canReject) {
     return Row(

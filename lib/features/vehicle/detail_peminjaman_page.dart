@@ -711,7 +711,7 @@ Future<void> _updateVehicle(Map<String, dynamic> newVehicle) async {
           'actionJabatan': userJabatan,
           'userId': widget.userId,
           'timestamp': Timestamp.now(),
-          'note': 'Ditolak oleh ${widget.userName} (${widget.role})',
+          'note': 'Ditolak oleh ${widget.userName}',
           'reason': reason, // ✅ Gunakan reason
         });
 

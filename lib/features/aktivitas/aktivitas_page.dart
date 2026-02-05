@@ -45,55 +45,71 @@ class _AktivitasPageState extends State<AktivitasPage> {
     setState(() => _isLoading = false);
   }
 
-    Future<void> _fetchOnGoingBookings() async {
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('vehicle_bookings')
-          .where('peminjamId', isEqualTo: widget.userId)
-          .where('status', isEqualTo: 'ON_GOING')
-          .orderBy('waktuPinjam', descending: true)
-          .get();
+Future<void> _fetchOnGoingBookings() async {
+  try {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('vehicle_bookings')
+        .where('peminjamId', isEqualTo: widget.userId)
+        .where('status', whereIn: ['SUBMITTED', 'APPROVAL_1', 'APPROVAL_2', 'APPROVAL_3', 'ON_GOING'])
+        .get(); // Hapus orderBy dari query
 
-      _onGoingList = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'id': doc.id,
-          ...data,
-        };
-      }).toList();
-      
-      print('Found ${_onGoingList.length} ongoing bookings');
-    } catch (e) {
-      print('Error fetching ongoing bookings: $e');
-      _onGoingList = [];
-    }
+    // Sort di memory setelah data diambil
+    _onGoingList = snapshot.docs.map((doc) {
+      final data = doc.data();
+      return {
+        'id': doc.id,
+        ...data,
+      };
+    }).toList();
+    
+    // Sort by waktuPinjam descending
+    _onGoingList.sort((a, b) {
+      final aTime = (a['waktuPinjam'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+      final bTime = (b['waktuPinjam'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+      return bTime.compareTo(aTime); // Descending
+    });
+    
+    print('Found ${_onGoingList.length} ongoing bookings');
+  } catch (e) {
+    print('Error fetching ongoing bookings: $e');
+    _onGoingList = [];
   }
+}
 
-    Future<void> _fetchHistoryBookings() async {
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('vehicle_bookings')
-          .where('peminjamId', isEqualTo: widget.userId)
-          .where('status', whereIn: ['DONE', 'CANCELLED'])
-          .orderBy('updatedAt', descending: true)
-          .limit(20)
-          .get();
+Future<void> _fetchHistoryBookings() async {
+  try {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('vehicle_bookings')
+        .where('peminjamId', isEqualTo: widget.userId)
+        .where('status', whereIn: ['DONE', 'CANCELLED'])
+        .get(); // Hapus orderBy dan limit dari query
 
-      _historyList = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'id': doc.id,
-          ...data,
-        };
-      }).toList();
-      
-      print('Found ${_historyList.length} history bookings');
-    } catch (e) {
-      print('Error fetching history bookings: $e');
-      _historyList = [];
+    _historyList = snapshot.docs.map((doc) {
+      final data = doc.data();
+      return {
+        'id': doc.id,
+        ...data,
+      };
+    }).toList();
+    
+    // Sort by updatedAt descending
+    _historyList.sort((a, b) {
+      final aTime = (a['updatedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+      final bTime = (b['updatedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+      return bTime.compareTo(aTime); // Descending
+    });
+    
+    // Limit to 20 items
+    if (_historyList.length > 20) {
+      _historyList = _historyList.sublist(0, 20);
     }
+    
+    print('Found ${_historyList.length} history bookings');
+  } catch (e) {
+    print('Error fetching history bookings: $e');
+    _historyList = [];
   }
-
+}
     String _formatDate(Timestamp? timestamp) {
     if (timestamp == null) return '-';
     final date = timestamp.toDate();

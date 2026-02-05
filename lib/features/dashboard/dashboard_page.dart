@@ -7,6 +7,7 @@ import '../aktivitas/aktivitas_page.dart';
 import '../admin/approval_kendaraan_page.dart';
 import '../vehicle/detail_peminjaman_page.dart';
 import '../profile/profile_page.dart';
+import '../admin/manajemen_user_page.dart';
 
 // Helper Widget untuk Approval Popup
 class _ApprovalItem extends StatelessWidget {
@@ -247,13 +248,16 @@ class _DashboardPageState extends State<DashboardPage> {
         // Manager Divisi (role tetap user) -> dapat menu Approval
         return [
           allMenus[0], // Peminjaman Mobil
-          allMenus[1], // Manajemen Kendaraan
           allMenus[2], // Peminjaman Ruang Meeting
+          allMenus[4], // Peminjaman Ruang Gym
           allMenus[5], // Approval Peminjaman
-        ];
+            ];
       } else {
-        // Staff biasa
-        return allMenus.take(3).toList();
+        return [
+          allMenus[0], // Peminjaman Mobil
+          allMenus[2], // Peminjaman Ruang Meeting
+          allMenus[4], // Peminjaman Ruang Gym
+        ];
       }
     } else if (widget.role == 'admin') {
       return allMenus;
@@ -709,7 +713,19 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               );
             }
-          }
+          } else if (item.title == 'Manajemen User') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ManajemenUserPage(
+                    role: widget.role,
+                    userName: widget.userName,
+                    userId: widget.userId,
+                    userDivision: widget.userDivision,
+                  ),
+                ),
+              );
+            }
           // TODO: Tambahkan navigasi untuk menu lainnya
         },
         child: Container(
