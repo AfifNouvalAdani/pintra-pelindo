@@ -8,6 +8,7 @@ import '../admin/approval_kendaraan_page.dart';
 import '../vehicle/detail_peminjaman_page.dart';
 import '../profile/profile_page.dart';
 import '../admin/manajemen_user_page.dart';
+import 'package:pintra/features/admin/manajemen_kendaraan_page.dart';
 
 // Helper Widget untuk Approval Popup
 class _ApprovalItem extends StatelessWidget {
@@ -713,18 +714,30 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               );
             }
-          } else if (item.title == 'Manajemen User') {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ManajemenUserPage(
-                    role: widget.role,
-                    userName: widget.userName,
-                    userId: widget.userId,
-                    userDivision: widget.userDivision,
+            } else if (item.title == 'Manajemen User') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ManajemenUserPage(
+                      role: widget.role,
+                      userName: widget.userName,
+                      userId: widget.userId,
+                      userDivision: widget.userDivision,
+                    ),
                   ),
-                ),
-              );
+                );
+            } else if (item.title == 'Manajemen Kendaraan') {  // ✅ TAMBAHKAN INI
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ManajemenKendaraanPage(
+                      role: widget.role,
+                      userName: widget.userName,
+                      userId: widget.userId,
+                      userDivision: widget.userDivision,
+                    ),
+                  ),
+                );
             }
           // TODO: Tambahkan navigasi untuk menu lainnya
         },

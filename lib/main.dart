@@ -24,6 +24,12 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  
+  // ✅ TAMBAHKAN INI - Set persistence ke LOCAL untuk web
+  if (kIsWeb) {
+    await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+  }
+  
   runApp(const PintraApp());
 }
 

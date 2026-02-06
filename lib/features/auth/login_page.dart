@@ -53,7 +53,7 @@ class _LoginPageState extends State<LoginPage> {
     _loadSavedLoginInfo();
   }
 
-  Future<void> loginWithNipp() async {
+Future<void> loginWithNipp() async {
   setState(() => _isLoading = true);
   
   try {
@@ -64,6 +64,9 @@ class _LoginPageState extends State<LoginPage> {
     if (nipp.isEmpty || password.isEmpty) {
       throw 'NIPP dan Password wajib diisi';
     }
+
+    // ✅ Set persistence SEBELUM login (untuk web)
+    await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
 
     // Simpan login info jika rememberMe dicentang
     await _saveLoginInfo(nipp, password);
@@ -82,10 +85,7 @@ class _LoginPageState extends State<LoginPage> {
     final userDoc = snap.docs.first;
     final userData = userDoc.data();
     final email = userData['email'];
-    final role = userData['role'];
-    final userId = userDoc.id;
     final userName = userData['nama'] ?? 'User';
-    final userDivision = userData['divisi'] ?? ''; // AMBIL DIVISI DI SINI
 
     // 2. Verifikasi password (password harus sama dengan NIPP)
     if (password != nipp) {
@@ -100,25 +100,17 @@ class _LoginPageState extends State<LoginPage> {
 
     if (!mounted) return;
 
-    // 4. Navigasi ke DashboardPage dengan SEMUA data yang diperlukan
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DashboardPage(
-          role: role,
-          userName: userName,
-          userId: userId,
-          userDivision: userDivision, // PASS DIVISI KE DASHBOARD
-        ),
-      ),
-    );
+    // ✅ HAPUS Navigator.pushReplacement!
+    // AuthWrapper akan otomatis detect user sudah login via StreamBuilder
+    // dan navigate ke Dashboard
 
-    // 5. Show success message
+    // 4. Show success message (opsional, karena langsung redirect)
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Login berhasil! Selamat datang, $userName'),
         backgroundColor: Colors.green.shade600,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 1), // ✅ Lebih pendek
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),

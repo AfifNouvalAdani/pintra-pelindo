@@ -260,57 +260,57 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Future<void> _showLogoutConfirmation(BuildContext context) async {
-    return showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text(
-          'Keluar Akun',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        content: const Text(
-          'Apakah Anda yakin ingin keluar dari akun ini?',
-          style: TextStyle(
-            fontSize: 15,
-            color: Colors.grey,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.grey.shade600,
-            ),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await FirebaseAuth.instance.signOut();
-              if (context.mounted) {
-                Navigator.of(context).pushNamedAndRemoveUntil(
-                  '/login',
-                  (route) => false,
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text('Keluar'),
-          ),
-        ],
+Future<void> _showLogoutConfirmation(BuildContext context) async {
+  return showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
       ),
-    );
-  }
+      title: const Text(
+        'Keluar Akun',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      content: const Text(
+        'Apakah Anda yakin ingin keluar dari akun ini?',
+        style: TextStyle(
+          fontSize: 15,
+          color: Colors.grey,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.grey.shade600,
+          ),
+          child: const Text('Batal'),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            Navigator.pop(context); // Tutup dialog
+            
+            // ✅ HANYA SIGNOUT - BIARKAN AuthWrapper HANDLE ROUTING
+            await FirebaseAuth.instance.signOut();
+            
+            // ✅ HAPUS Navigator.pushNamedAndRemoveUntil
+            // AuthWrapper akan otomatis detect user = null
+            // dan redirect ke LoginPage via StreamBuilder
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red.shade600,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          child: const Text('Keluar'),
+        ),
+      ],
+    ),
+  );
+}
 }
