@@ -115,12 +115,12 @@ class ApprovalNotificationService {
 
       
       // 4. Format Message
-      final message = _buildApprovalMessage(
+      final message = await _buildApprovalMessage(
         bookingData: bookingData,
         approvalLink: approvalLink,
         managerName: managerData['nama'] ?? 'Manager',
       );
-      
+            
       // 5. Send WhatsApp
       return await _sendWhatsApp(managerPhone, message);
       
@@ -165,12 +165,11 @@ class ApprovalNotificationService {
       final approvalLink = '<$rawLink>';
       
       // 4. Format Message
-      final message = _buildApprovalMessage(
+      final message = await _buildApprovalMessage(
         bookingData: bookingData,
         approvalLink: approvalLink,
         managerName: managerData['nama'] ?? 'Manager',
       );
-      
       // 5. Send WhatsApp
       return await _sendWhatsApp(managerPhone, message);
       
@@ -215,12 +214,11 @@ static Future<bool> sendApprovalNotificationToOperator({
     final approvalLink = '<$rawLink>';
     
     // 4. Format Message
-    final message = _buildApprovalMessage(
+    final message = await _buildApprovalMessage(
       bookingData: bookingData,
       approvalLink: approvalLink,
       managerName: operatorData['nama'] ?? 'Operator',
     );
-    
     // 5. Send WhatsApp
     return await _sendWhatsApp(operatorPhone, message);
     
@@ -230,11 +228,11 @@ static Future<bool> sendApprovalNotificationToOperator({
   }
 }
   
-static String _buildApprovalMessage({
+static Future<String> _buildApprovalMessage({
   required Map<String, dynamic> bookingData,
   required String approvalLink,
   required String managerName,
-}) {
+}) async {
   final waktuPinjam = bookingData['waktuPinjam'] is Timestamp
       ? (bookingData['waktuPinjam'] as Timestamp).toDate()
       : null;
@@ -249,6 +247,32 @@ static String _buildApprovalMessage({
       ? DateFormat('dd MMM yyyy, HH:mm', 'id_ID').format(waktuKembali)
       : '-';
   
+  // ✅ PERBAIKAN: Ambil NIPP dari database users jika tidak ada di bookingData
+  String nipp = bookingData['nipp']?.toString() ?? '';
+  
+  if (nipp.isEmpty) {
+    try {
+      final peminjamId = bookingData['peminjamId'];
+      if (peminjamId != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(peminjamId)
+            .get();
+        
+        if (userDoc.exists) {
+          nipp = userDoc.data()?['nipp']?.toString() ?? '-';
+        } else {
+          nipp = '-';
+        }
+      } else {
+        nipp = '-';
+      }
+    } catch (e) {
+      print('Error fetching NIPP: $e');
+      nipp = '-';
+    }
+  }
+  
   return '''
 *APPROVAL PEMINJAMAN KENDARAAN*
 
@@ -259,7 +283,7 @@ Terdapat pengajuan peminjaman kendaraan yang memerlukan persetujuan Anda:
 *Detail Peminjaman:*
 - ID Pemesanan: ${bookingData['id']}
 - Nama: ${bookingData['namaPeminjam']}
-- NIPP: ${bookingData['nipp'] ?? '-'}
+- NIPP: $nipp
 - Divisi: ${bookingData['divisi']}
 - Kendaraan: ${bookingData['vehicle']?['nama'] ?? '-'} (${bookingData['vehicle']?['platNomor'] ?? '-'})
 - Tujuan: ${bookingData['tujuan']}

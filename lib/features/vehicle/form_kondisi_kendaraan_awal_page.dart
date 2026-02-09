@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class FormKondisiKendaraanAwalPage extends StatefulWidget {
   final String role;
@@ -358,12 +358,44 @@ Future<void> _loadKelengkapanKendaraan() async {
     );
   }
 
-  Future<void> _uploadFoto() async {
-    try {
-      final ImagePicker picker = ImagePicker();
-      
-      // Tampilkan pilihan: Kamera atau Galeri
-      final ImageSource? source = await showDialog<ImageSource>(
+Future<void> _uploadFoto() async {
+  try {
+    final ImagePicker picker = ImagePicker();
+    
+    // ✅ Deteksi apakah running di Web atau Mobile
+    final bool isWebPlatform = kIsWeb;
+    
+    ImageSource? source;
+    
+    if (isWebPlatform) {
+      // 🌐 UNTUK WEB: Hanya tampilkan opsi yang tersedia
+      source = await showDialog<ImageSource>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Pilih Sumber Foto'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Di web, kamera hanya muncul jika ada device kamera
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Kamera'),
+                subtitle: const Text('Gunakan webcam atau kamera HP', style: TextStyle(fontSize: 12)),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Galeri'),
+                subtitle: const Text('Pilih dari file', style: TextStyle(fontSize: 12)),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      // 📱 UNTUK MOBILE (APK): Tampilkan kedua opsi normal
+      source = await showDialog<ImageSource>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Pilih Sumber Foto'),
@@ -384,26 +416,23 @@ Future<void> _loadKelengkapanKendaraan() async {
           ),
         ),
       );
+    }
 
-      if (source == null) return;
+    if (source == null) return;
 
-      final XFile? image = await picker.pickImage(
-        source: source,
-        maxWidth: 1024, // Resize otomatis
-        maxHeight: 1024,
-        imageQuality: 70, // Kompresi 70%
-      );
+    final XFile? image = await picker.pickImage(
+      source: source,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 70,
+    );
 
-      if (image != null) {
-        setState(() => _isUploading = true);
+    if (image != null) {
+      setState(() => _isUploading = true);
 
-        // Baca file sebagai bytes
-        final bytes = await File(image.path).readAsBytes();
-        
-        // Convert ke base64
+      try {
+        final bytes = await image.readAsBytes();
         final base64String = base64Encode(bytes);
-        
-        // Cek ukuran (jangan lebih dari 800KB untuk safety)
         final sizeInKB = base64String.length * 0.75 / 1024;
         
         if (sizeInKB > 800) {
@@ -415,22 +444,34 @@ Future<void> _loadKelengkapanKendaraan() async {
         }
 
         setState(() {
-          _photoFile = File(image.path);
+          _photoFile = null;
           _photoBase64 = base64String;
           _hasPhoto = true;
           _isUploading = false;
         });
         
-        print('Foto berhasil dipilih. Size: ${sizeInKB.toStringAsFixed(2)} KB');
-      }
-    } catch (e) {
-      print('Error picking image: $e');
-      setState(() => _isUploading = false);
-      if (mounted) {
-        _showSnackBar('Gagal mengambil foto');
+        print('✅ Foto berhasil dipilih. Size: ${sizeInKB.toStringAsFixed(2)} KB');
+      } catch (e) {
+        print('❌ Error converting image: $e');
+        setState(() => _isUploading = false);
+        if (mounted) {
+          _showSnackBar('Gagal memproses foto');
+        }
       }
     }
+  } catch (e) {
+    print('❌ Error picking image: $e');
+    setState(() => _isUploading = false);
+    if (mounted) {
+      // ✅ Pesan error yang lebih informatif
+      String errorMessage = 'Gagal mengambil foto';
+      if (kIsWeb && e.toString().contains('camera')) {
+        errorMessage = 'Kamera tidak tersedia. Gunakan opsi Galeri atau pastikan browser memiliki izin kamera';
+      }
+      _showSnackBar(errorMessage);
+    }
   }
+}
 
   void _hapusFoto() {
     setState(() {
@@ -641,42 +682,58 @@ Future<void> _loadKelengkapanKendaraan() async {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.green.shade100),
                       ),
-                      child: Row(
+                      child: Column(
                         children: [
-                          Icon(
-                            Icons.check_circle_rounded,
-                            color: Colors.green.shade700,
-                            size: 24,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Foto terunggah',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.green.shade800,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'kendaraan_awal.jpg',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
+                          // ✅ TAMBAHKAN PREVIEW FOTO
+                          if (_photoBase64 != null)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.memory(
+                                base64Decode(_photoBase64!),
+                                height: 150,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
                             ),
-                          ),
-                          IconButton(
-                            onPressed: _hapusFoto,
-                            icon: Icon(
-                              Icons.delete_outline_rounded,
-                              color: Colors.grey.shade500,
-                            ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.check_circle_rounded,
+                                color: Colors.green.shade700,
+                                size: 24,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Foto terunggah',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.green.shade800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Size: ${(_photoBase64!.length * 0.75 / 1024).toStringAsFixed(2)} KB',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: _hapusFoto,
+                                icon: Icon(
+                                  Icons.delete_outline_rounded,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

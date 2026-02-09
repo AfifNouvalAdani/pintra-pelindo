@@ -130,7 +130,7 @@ class _DashboardPageState extends State<DashboardPage> {
         setState(() {
           _userProfileData = {
             'email': data['email'] ?? '-',
-            'noTelp': data['noTelp'] ?? '-',
+            'noTelp': data['noTelp']?.toString() ?? '-',
             'nipp': data['nipp'] ?? widget.userId,
           };
         });
