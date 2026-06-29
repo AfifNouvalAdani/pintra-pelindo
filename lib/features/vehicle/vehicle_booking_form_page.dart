@@ -4,6 +4,7 @@ import '../dashboard/dashboard_page.dart';
 import '../vehicle/detail_peminjaman_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/approval_notification_service.dart';
+import 'package:flutter/services.dart';
 
 // Custom Time Picker 24 Jam
 class TimePicker24Hour extends StatefulWidget {
@@ -41,90 +42,185 @@ class _TimePicker24HourState extends State<TimePicker24Hour> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Pilih Jam'),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      title: Container(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: const Text(
+          'Pilih Jam',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 18,
+            color: Colors.black87,
+          ),
+        ),
+      ),
+      contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
       content: Container(
         height: 200,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        width: 300,
+        child: Stack(
+          alignment: Alignment.center,
           children: [
-            // Jam picker
-            Expanded(
-              child: Column(
-                children: [
-                  Text(
-                    'Jam',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade600,
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.center,
+                child: Transform.translate(
+                  offset: const Offset(0, 15), // 🔥 UBAH ANGKA INI
+                  child: Container(
+                    height: 50,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.blue.shade200.withOpacity(0.5),
+                        width: 1.5,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: ListWheelScrollView(
-                      controller: _hourController,
-                      itemExtent: 50,
-                      diameterRatio: 1.5,
-                      physics: const FixedExtentScrollPhysics(),
-                      onSelectedItemChanged: (_) {},
-                      children: _hours.map((hour) {
-                        return Center(
-                          child: Text(
-                            hour.toString().padLeft(2, '0'),
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            Padding(
-              padding: const EdgeInsets.only(bottom: 40),
-              child: Text(
-                ':',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue.shade700,
                 ),
               ),
             ),
+
             
-            // Menit picker
-            Expanded(
-              child: Column(
+            // Container utama dengan jam dan menit
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.max,
                 children: [
-                  Text(
-                    'Menit',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+                  // Kolom Jam
                   Expanded(
-                    child: ListWheelScrollView(
-                      controller: _minuteController,
-                      itemExtent: 50,
-                      diameterRatio: 1.5,
-                      physics: const FixedExtentScrollPhysics(),
-                      onSelectedItemChanged: (_) {},
-                      children: _minutes.map((minute) {
-                        return Center(
-                          child: Text(
-                            minute.toString().padLeft(2, '0'),
-                            style: const TextStyle(
-                              fontSize: 24,
+                    child: SizedBox(
+                      height: 200,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Jam',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade600,
                               fontWeight: FontWeight.w500,
+                              letterSpacing: 0.5,
                             ),
                           ),
-                        );
-                      }).toList(),
+                          const SizedBox(height: 8),
+                          Expanded(
+                            child: Container(
+                              alignment: Alignment.center,
+                              child: ListWheelScrollView.useDelegate(
+                                controller: _hourController,
+                                itemExtent: 50,
+                                physics: const FixedExtentScrollPhysics(),
+                                onSelectedItemChanged: (index) {
+                                  HapticFeedback.selectionClick();
+                                },
+                                childDelegate: ListWheelChildBuilderDelegate(
+                                  builder: (context, index) {
+                                    final isSelected = index == _hourController.selectedItem;
+                                    return Container(
+                                      height: 50,
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        _hours[index].toString().padLeft(2, '0'),
+                                        style: TextStyle(
+                                          fontSize: 32,
+                                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
+                                          color: isSelected ? Colors.blue.shade700 : Colors.grey.shade700,
+                                          fontFamily: 'monospace',
+                                          letterSpacing: 2,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  childCount: _hours.length,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  Container(
+                    height: 200,
+                    alignment: Alignment.center,
+                    child: Transform.translate(
+                      offset: const Offset(0, 10), // 🔥 GANTI ANGKA INI
+                      child: Text(
+                        ':',
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w300,
+                          color: Colors.blue.shade700,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  
+                  // Kolom Menit
+                  Expanded(
+                    child: SizedBox(
+                      height: 200,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Menit',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Expanded(
+                            child: Container(
+                              alignment: Alignment.center,
+                              child: ListWheelScrollView.useDelegate(
+                                controller: _minuteController,
+                                itemExtent: 50,
+                                physics: const FixedExtentScrollPhysics(),
+                                onSelectedItemChanged: (index) {
+                                  HapticFeedback.selectionClick();
+                                },
+                                childDelegate: ListWheelChildBuilderDelegate(
+                                  builder: (context, index) {
+                                    final isSelected = index == _minuteController.selectedItem;
+                                    return Container(
+                                      height: 50,
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        _minutes[index].toString().padLeft(2, '0'),
+                                        style: TextStyle(
+                                          fontSize: 32,
+                                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
+                                          color: isSelected ? Colors.blue.shade700 : Colors.grey.shade700,
+                                          fontFamily: 'monospace',
+                                          letterSpacing: 2,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  childCount: _minutes.length,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -133,28 +229,64 @@ class _TimePicker24HourState extends State<TimePicker24Hour> {
           ],
         ),
       ),
+      actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(
-            'Batal',
-            style: TextStyle(color: Colors.grey.shade600),
-          ),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            final selectedHour = _hours[_hourController.selectedItem];
-            final selectedMinute = _minutes[_minuteController.selectedItem];
-            widget.onTimeSelected(TimeOfDay(
-              hour: selectedHour,
-              minute: selectedMinute,
-            ));
-            Navigator.pop(context);
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue.shade700,
-          ),
-          child: const Text('Pilih'),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  side: BorderSide(color: Colors.grey.shade300),
+                  backgroundColor: Colors.transparent,
+                ),
+                child: Text(
+                  'Batal',
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () {
+                  HapticFeedback.mediumImpact();
+                  final selectedHour = _hours[_hourController.selectedItem];
+                  final selectedMinute = _minutes[_minuteController.selectedItem];
+                  widget.onTimeSelected(TimeOfDay(
+                    hour: selectedHour,
+                    minute: selectedMinute,
+                  ));
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.shade700,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  shadowColor: Colors.blue.shade200,
+                ),
+                child: const Text(
+                  'Pilih',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -168,19 +300,18 @@ class _TimePicker24HourState extends State<TimePicker24Hour> {
   }
 }
 
-// Halaman Form Peminjaman
 class VehicleBookingFormPage extends StatefulWidget {
   final String role;
   final String userName;
   final String userId;
-  final String userDivision; // ✅ TAMBAHKAN
+  final String userDivision;
 
   const VehicleBookingFormPage({
     super.key,
     required this.role,
     required this.userName,
     required this.userId,
-    required this.userDivision, // ✅
+    required this.userDivision,
   });
 
   @override
@@ -287,6 +418,7 @@ Future<void> _checkExistingBookings() async {
             'transmisi': data['transmisi'] ?? '-',
             'kelengkapan': (data['kelengkapan'] as List?) ?? [],
             'odometerTerakhir': data['odometerTerakhir'] ?? 0,
+            'sisaBBMTerakhir': data['sisaBBMTerakhir'] ?? '-',
           };
         }).toList();
       });
@@ -308,8 +440,6 @@ Future<void> _checkExistingBookings() async {
       final activeBookingsSnapshot = await FirebaseFirestore.instance
           .collection('vehicle_bookings')
           .where('status', whereIn: [
-            'SUBMITTED',
-            'APPROVAL_1',
             'APPROVAL_2',
             'APPROVAL_3',
             'ON_GOING'
@@ -359,6 +489,7 @@ Future<void> _checkExistingBookings() async {
           'transmisi': data['transmisi'] ?? '-',
           'kelengkapan': (data['kelengkapan'] as List?) ?? [],
           'odometerTerakhir': data['odometerTerakhir'] ?? 0,
+          'sisaBBMTerakhir': data['sisaBBMTerakhir'] ?? '-',
         };
       }).toList();
 
@@ -417,12 +548,15 @@ Future<void> _checkExistingBookings() async {
     }
   }
 
-  Future<void> pickTime(bool isPinjam) async {
-    final currentTime = isPinjam ? jamPinjam : jamKembali;
-    
-    showDialog(
-      context: context,
-      builder: (context) => TimePicker24Hour(
+Future<void> pickTime(bool isPinjam) async {
+  final currentTime = isPinjam ? jamPinjam : jamKembali;
+  
+  showDialog(
+    context: context,
+    barrierColor: Colors.black.withOpacity(0.5), // ✅ TAMBAHKAN
+    builder: (context) {
+      HapticFeedback.lightImpact(); // ✅ TAMBAHKAN getaran saat dialog muncul
+      return TimePicker24Hour(
         initialTime: currentTime ?? TimeOfDay.now(),
         onTimeSelected: (selectedTime) async {
           setState(() {
@@ -431,24 +565,22 @@ Future<void> _checkExistingBookings() async {
             } else {
               jamKembali = selectedTime;
             }
-            // ✅ CEK APAKAH SEMUA WAKTU SUDAH LENGKAP
             _isDateTimeComplete = tglPinjam != null && jamPinjam != null && 
                                   tglKembali != null && jamKembali != null;
             
-            // ✅ TAMBAHKAN: Reset pilihan kendaraan karena ketersediaan berubah
             if (_isDateTimeComplete) {
               kendaraanId = null;
               selectedVehicle = null;
             }
           });
           
-          // ✅ Reload kendaraan setelah pilih jam
           if (_isDateTimeComplete) {
             await _loadAvailableVehiclesForDateRange();
           }
         },
-      ),
-    );
+      );
+    },
+  );
 }
 
   // Fungsi format tanggal
@@ -474,20 +606,43 @@ Future<void> _checkExistingBookings() async {
     );
   }
 
-  Future<void> _submitForm() async {
-    // Validasi form
-    if (keperluan == null) {
-      _showSnackBar('Pilih keperluan peminjaman');
-      return;
-    }
+Future<void> _submitForm() async {
+  // Validasi keperluan
+  if (keperluan == null) {
+    _showSnackBar('Pilih keperluan peminjaman');
+    return;
+  }
 
-    if (keperluan == 'DINAS') {
+  // Validasi DINAS
+  if (keperluan == 'DINAS') {
     if (nomorController.text.trim().isEmpty) {
       _showSnackBar('Masukkan nomor SPPD');
       return;
     }
     if (nomorController.text.trim().length < 5) {
       _showSnackBar('Nomor SPPD minimal 5 karakter');
+      return;
+    }
+  }
+
+  if (keperluan == 'UNDANGAN') {
+    if (nomorController.text.trim().isEmpty) {
+      _showSnackBar('Masukkan nomor undangan');
+      return;
+    }
+    if (nomorController.text.trim().length < 5) {
+      _showSnackBar('Nomor undangan minimal 5 karakter');
+      return;
+    }
+  }
+
+  if (keperluan == 'KEGIATAN_LAIN') {
+    if (kegiatanController.text.trim().isEmpty) {
+      _showSnackBar('Masukkan alasan/keterangan kegiatan');
+      return;
+    }
+    if (kegiatanController.text.trim().length < 10) {
+      _showSnackBar('Alasan/keterangan minimal 10 karakter');
       return;
     }
   }
@@ -515,32 +670,30 @@ Future<void> _checkExistingBookings() async {
     final waktuPinjamTemp = _combineDateTime(tglPinjam!, jamPinjam!);
     final waktuKembaliTemp = _combineDateTime(tglKembali!, jamKembali!);
 
-    // Cek lagi apakah kendaraan masih tersedia
     final doubleBookingCheck = await FirebaseFirestore.instance
         .collection('vehicle_bookings')
         .where('vehicleId', isEqualTo: kendaraanId)
-        .where('status', whereIn: ['SUBMITTED', 'APPROVAL_1', 'APPROVAL_2', 'APPROVAL_3', 'ON_GOING'])
+        .where('status', whereIn: ['APPROVAL_2', 'APPROVAL_3', 'ON_GOING'])
         .get();
 
     for (var doc in doubleBookingCheck.docs) {
       final booking = doc.data();
       final bookingStart = (booking['waktuPinjam'] as Timestamp).toDate();
       final bookingEnd = (booking['waktuKembali'] as Timestamp).toDate();
-      
-      bool isBentrok = waktuPinjamTemp.isBefore(bookingEnd) && 
-                      waktuKembaliTemp.isAfter(bookingStart);
-      
+
+      bool isBentrok = waktuPinjamTemp.isBefore(bookingEnd) &&
+          waktuKembaliTemp.isAfter(bookingStart);
+
       if (isBentrok) {
         _showSnackBar('Kendaraan ini sudah dibooking orang lain pada waktu yang sama. Silakan refresh dan pilih kendaraan lain.');
-        await _loadAvailableVehiclesForDateRange(); // Refresh list
+        await _loadAvailableVehiclesForDateRange();
         return;
       }
     }
 
-    // Validasi tanggal dan waktu
     final waktuPinjam = _combineDateTime(tglPinjam!, jamPinjam!);
     final waktuKembali = _combineDateTime(tglKembali!, jamKembali!);
-    
+
     if (waktuKembali.isBefore(waktuPinjam)) {
       _showSnackBar('Waktu kembali harus setelah waktu pinjam');
       return;
@@ -552,7 +705,6 @@ Future<void> _checkExistingBookings() async {
     }
 
     try {
-      // Ambil data user dari Firestore
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userId)
@@ -560,8 +712,21 @@ Future<void> _checkExistingBookings() async {
 
       final userData = userDoc.data();
       final divisi = userData?['divisi'] ?? '';
+      final jabatan = (userData?['jabatan'] ?? '').toLowerCase();
+      final role = widget.role;
 
-      // Buat data booking
+      // Tentukan initial status berdasarkan role peminjam
+      String initialStatus;
+      if (role == 'admin' || role == 'manager_umum') {
+        initialStatus = 'APPROVAL_3'; // Langsung approved
+      } else if (role == 'operator') {
+        initialStatus = 'APPROVAL_2'; // Skip ke Manager Umum
+      } else if (role == 'user' && jabatan.contains('manager')) {
+        initialStatus = 'APPROVAL_1'; // Skip ke Operator
+      } else {
+        initialStatus = 'SUBMITTED'; // Normal flow
+      }
+
       final bookingData = {
         'peminjamId': widget.userId,
         'namaPeminjam': widget.userName,
@@ -580,35 +745,56 @@ Future<void> _checkExistingBookings() async {
           'platNomor': selectedVehicle?['platNomor'] ?? '-',
           'tahun': selectedVehicle?['tahun'] ?? '-',
         },
-        'status': 'SUBMITTED',
+        'status': initialStatus,
         'createdAt': Timestamp.now(),
+        'peminjamRole': role,
       };
 
-      // Simpan ke Firestore
       final bookingDoc = await FirebaseFirestore.instance
           .collection('vehicle_bookings')
           .add(bookingData);
-      
+
+      final bookingDataWithId = {
+        'id': bookingDoc.id,
+        ...bookingData,
+        'nipp': userData?['nipp'] ?? '-',
+      };
+
+      // Kirim notifikasi ke approver yang tepat
+      if (initialStatus == 'SUBMITTED') {
         print('📨 Mengirim notifikasi WA ke Manager Divisi...');
-
-        final bookingDataWithId = {
-          'id': bookingDoc.id,
-          ...bookingData,
-          'nipp': userData?['nipp'] ?? '-',
-        };
-
-        final notifSuccess = await ApprovalNotificationService.sendApprovalNotificationToManagerDivisi(
+        ApprovalNotificationService.sendApprovalNotificationToManagerDivisi(
           bookingId: bookingDoc.id,
           bookingData: bookingDataWithId,
-        );
+        ).then((success) {
+          print(success ? '✅ Notifikasi WA berhasil dikirim' : '⚠️ Gagal mengirim notifikasi WA');
+        }).catchError((error) {
+          print('❌ Error mengirim notifikasi WA: $error');
+        });
+      } else if (initialStatus == 'APPROVAL_1') {
+        print('📨 Manager Divisi meminjam → Notifikasi ke Operator...');
+        ApprovalNotificationService.sendApprovalNotificationToOperator(
+          bookingId: bookingDoc.id,
+          bookingData: bookingDataWithId,
+        ).then((success) {
+          print(success ? '✅ Notifikasi WA berhasil dikirim' : '⚠️ Gagal mengirim notifikasi WA');
+        }).catchError((error) {
+          print('❌ Error mengirim notifikasi WA: $error');
+        });
+      } else if (initialStatus == 'APPROVAL_2') {
+        print('📨 Operator meminjam → Notifikasi ke Manager Umum...');
+        ApprovalNotificationService.sendApprovalNotificationToManagerUmum(
+          bookingId: bookingDoc.id,
+          bookingData: bookingDataWithId,
+        ).then((success) {
+          print(success ? '✅ Notifikasi WA berhasil dikirim' : '⚠️ Gagal mengirim notifikasi WA');
+        }).catchError((error) {
+          print('❌ Error mengirim notifikasi WA: $error');
+        });
+      } else if (initialStatus == 'APPROVAL_3') {
+        print('✅ Admin/Manager Umum: Peminjaman langsung disetujui, tidak perlu notifikasi approval');
+      }
 
-        if (notifSuccess) {
-          print('✅ Notifikasi WA berhasil dikirim');
-        } else {
-          print('⚠️ Gagal mengirim notifikasi WA');
-        }
-
-      // Prepare data untuk halaman detail
       final uiData = {
         'id': bookingDoc.id,
         'nama': widget.userName,
@@ -623,12 +809,11 @@ Future<void> _checkExistingBookings() async {
         'jamKembali': formatTime(jamKembali),
         'kendaraan': selectedVehicle?['nama'] ?? '',
         'platNomor': selectedVehicle?['platNomor'] ?? '',
-        'status': 'SUBMITTED',
+        'status': initialStatus, // ✅ Gunakan initialStatus bukan hardcode 'SUBMITTED'
         'waktuPinjam': waktuPinjam,
         'waktuKembali': waktuKembali,
       };
 
-      // Navigasi ke halaman detail
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -644,7 +829,6 @@ Future<void> _checkExistingBookings() async {
           ),
         );
       }
-
     } catch (e) {
       _showSnackBar('Gagal menyimpan data: $e');
       print('Error submitting booking: $e');
@@ -691,7 +875,7 @@ Future<void> _checkExistingBookings() async {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Status: $_getStatusLabel(status)'),
+                      Text('Status: ${_getStatusLabel(status)}'),
                       Text('Tujuan: $tujuan'),
                     ],
                   ),
@@ -911,9 +1095,6 @@ child: Column(
                   ],
                 ),
               ),
-
-              // ✅ WARNING ORANGE DIMULAI DI SINI (SEJAJAR DENGAN CONTAINER BIRU)
-// ✅ WARNING ORANGE DIMULAI DI SINI
               if (_userBookings.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Container(
@@ -1185,7 +1366,6 @@ child: Column(
 
               const SizedBox(height: 20),
 
-              // Pilih Kendaraan
               Text(
                 'Pilih Kendaraan${_isDateTimeComplete ? ' (${_availableVehicles.length} tersedia)' : ''}',
                 style: TextStyle(
@@ -1196,7 +1376,6 @@ child: Column(
               ),
               const SizedBox(height: 8),
 
-              // ✅ TAMBAHKAN WARNING JIKA BELUM PILIH TANGGAL/JAM
               if (!_isDateTimeComplete)
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -1390,20 +1569,33 @@ child: Column(
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Tahun: ${selectedVehicle!['tahun']} | Jenis: ${selectedVehicle!['jenis']}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
                         'Kursi: ${selectedVehicle!['kursi']} | BBM: ${selectedVehicle!['bbm']} | Transmisi: ${selectedVehicle!['transmisi']}',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey.shade600,
                         ),
                       ),
+                      if (selectedVehicle!['sisaBBMTerakhir'] != '-') ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.local_gas_station_rounded,
+                                size: 14,
+                                color: Colors.orange.shade600,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Sisa BBM Terakhir: ${selectedVehicle!['sisaBBMTerakhir']}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.orange.shade700,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+],
                       if ((selectedVehicle!['kelengkapan'] as List).isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(

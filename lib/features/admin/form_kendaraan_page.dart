@@ -45,6 +45,7 @@ class _FormKendaraanPageState extends State<FormKendaraanPage> {
   bool _apar = false;
   bool _segitigaBahaya = false;
   bool _banSerep = false;
+  String? _sisaBBMTerakhir;
 
   final List<String> _jenisOptions = [
     'Mobil',
@@ -104,6 +105,7 @@ class _FormKendaraanPageState extends State<FormKendaraanPage> {
     _selectedTransmisi = widget.kendaraanData?['transmisi'] ?? 'A/T';
     _selectedBBM = widget.kendaraanData?['bbm'] ?? 'Bensin';
     _statusAktif = widget.kendaraanData?['statusAktif'] ?? true;
+    _sisaBBMTerakhir = widget.kendaraanData?['sisaBBMTerakhir'];
   }
 
   @override
@@ -214,7 +216,8 @@ class _FormKendaraanPageState extends State<FormKendaraanPage> {
         'odometerTerakhir': odometer,
         'statusAktif': _statusAktif,
         'kelengkapan': kelengkapanArray,
-        'photos': [], // Bisa diisi nanti
+        'sisaBBMTerakhir': _sisaBBMTerakhir,
+        'photos': [],
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -276,6 +279,7 @@ class _FormKendaraanPageState extends State<FormKendaraanPage> {
         'odometerTerakhir': odometer,
         'statusAktif': _statusAktif,
         'kelengkapan': kelengkapanArray,
+        'sisaBBMTerakhir': _sisaBBMTerakhir,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -870,7 +874,63 @@ class _FormKendaraanPageState extends State<FormKendaraanPage> {
                       ),
                       const SizedBox(height: 16),
 
-                      // ✅ KELENGKAPAN KENDARAAN
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Sisa BBM Terakhir',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey.shade800,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: DropdownButtonFormField<String>(
+                              value: _sisaBBMTerakhir,
+                              hint: Text(
+                                'Pilih sisa BBM',
+                                style: TextStyle(color: Colors.grey.shade500),
+                              ),
+                              decoration: InputDecoration(
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
+                                ),
+                                prefixIcon: Icon(
+                                  Icons.local_gas_station_rounded,
+                                  color: Colors.grey.shade600,
+                                ),
+                                filled: true,
+                                fillColor: Colors.transparent,
+                              ),
+                              items: const [
+                                DropdownMenuItem(value: '0-25%', child: Text('0-25% (Hampir Habis)')),
+                                DropdownMenuItem(value: '25-50%', child: Text('25-50% (Kurang dari Setengah)')),
+                                DropdownMenuItem(value: '50-75%', child: Text('50-75% (Lebih dari Setengah)')),
+                                DropdownMenuItem(value: '75-100%', child: Text('75-100% (Hampir Penuh)')),
+                              ],
+                              onChanged: (value) {
+                                setState(() {
+                                  _sisaBBMTerakhir = value;
+                                });
+                              },
+                              dropdownColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(

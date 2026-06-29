@@ -1,11 +1,10 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
-const cors = require('cors')({ origin: true }); // ✅ Tambahkan ini
+const cors = require('cors')({ origin: true });
 
 admin.initializeApp();
 
 exports.validateToken = functions.https.onRequest(async (req, res) => {
-    // ✅ Enable CORS
     cors(req, res, async () => {
         try {
             const { token } = req.body;
@@ -48,7 +47,6 @@ exports.approveBooking = functions.https.onRequest(async (req, res) => {
         try {
             const { bookingId, token, userId } = req.body;
 
-            // 1. Validasi token dan user
             const tokenDoc = await admin.firestore()
                 .collection('approval_tokens')
                 .doc(token)
@@ -59,8 +57,7 @@ exports.approveBooking = functions.https.onRequest(async (req, res) => {
             }
 
             const tokenData = tokenDoc.data();
-            
-            // Cek token expired
+
             if (new Date() > tokenData.expiresAt.toDate()) {
                 return res.json({ success: false, message: 'Token sudah kadaluarsa' });
             }
@@ -73,7 +70,6 @@ exports.approveBooking = functions.https.onRequest(async (req, res) => {
                 return res.json({ success: false, message: 'User tidak sesuai' });
             }
 
-            // 2. Update booking status
             await admin.firestore()
                 .collection('vehicle_bookings')
                 .doc(bookingId)
@@ -106,7 +102,6 @@ exports.rejectBooking = functions.https.onRequest(async (req, res) => {
         try {
             const { bookingId, token, userId, reason } = req.body;
 
-            // 1. Validasi token
             const tokenDoc = await admin.firestore()
                 .collection('approval_tokens')
                 .doc(token)
@@ -122,7 +117,6 @@ exports.rejectBooking = functions.https.onRequest(async (req, res) => {
                 return res.json({ success: false, message: 'User tidak sesuai' });
             }
 
-            // 2. Update booking status
             await admin.firestore()
                 .collection('vehicle_bookings')
                 .doc(bookingId)
@@ -133,7 +127,6 @@ exports.rejectBooking = functions.https.onRequest(async (req, res) => {
                     rejectedBy: userId
                 });
 
-            // 3. Mark token as used
             await admin.firestore()
                 .collection('approval_tokens')
                 .doc(token)
@@ -142,7 +135,6 @@ exports.rejectBooking = functions.https.onRequest(async (req, res) => {
                     usedAt: admin.firestore.FieldValue.serverTimestamp()
                 });
 
-            // 4. Tambahkan ke riwayat approval
             await admin.firestore()
                 .collection('vehicle_bookings')
                 .doc(bookingId)

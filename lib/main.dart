@@ -1,19 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // ✅ TAMBAHKAN
-import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ TAMBAHKAN
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'firebase_options.dart';
 import 'features/splash/splash_page.dart';
 import 'features/auth/login_page.dart';
-import 'features/dashboard/dashboard_page.dart'; // ✅ TAMBAHKAN
+import 'features/dashboard/dashboard_page.dart'; 
 import 'package:app_links/app_links.dart';
 import 'dart:async';
 import 'features/admin/deep_link_approval_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'features/admin/public_approval_page.dart';
 import 'package:intl/date_symbol_data_local.dart';
-
+import 'features/services/auto_cancel_service.dart';
+import 'features/admin/public_cancellation_approval_page.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'features/ruang_meeting/room_display_page.dart';
+import 'features/ruang_meeting/public_room_approval_page.dart';
+import 'features/ruang_meeting/public_room_cancellation_approval_page.dart';
+import 'features/gym/public_gym_approval_page.dart';
 import 'web_url_helper_stub.dart'
+
     if (dart.library.html) 'web_url_helper_web.dart';
 
 void main() async {
@@ -25,10 +32,13 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   
-  // ✅ TAMBAHKAN INI - Set persistence ke LOCAL untuk web
   if (kIsWeb) {
     await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
   }
+
+  AutoCancelService.checkAndCancelExpiredBookings();
+
+  AutoCancelService.checkAndSendReturnReminders();
   
   runApp(const PintraApp());
 }
@@ -114,40 +124,78 @@ class _PintraAppState extends State<PintraApp> {
     }
   }
 
-  // ✅ FUNGSI untuk cek initial web route
-  Widget _getInitialPage() {
-    // Prioritas 1: Cek deep link approval (untuk web)
-    if (kIsWeb) {
-      try {
-        final currentUrl = getCurrentUrl();
-        final uri = Uri.parse(currentUrl);
-        
-        print('🌐 Initial web URL: $currentUrl');
-        print('🌐 Path: ${uri.path}');
-        print('🌐 Query: ${uri.queryParameters}');
-        
-        if (uri.path.contains('/approval')) {
-          final bookingId = uri.queryParameters['bookingId'];
-          final token = uri.queryParameters['token'];
-          
-          print('📋 Found bookingId: $bookingId');
-          print('🔑 Found token: $token');
-          
-          if (bookingId != null && token != null) {
-            return PublicApprovalPage(
-              bookingId: bookingId,
-              token: token,
-            );
-          }
+Widget _getInitialPage() {
+  if (kIsWeb) {
+    try {
+      final currentUrl = getCurrentUrl();
+      final uri = Uri.parse(currentUrl);
+
+      if (uri.path.contains('/room-cancellation-approval')) {
+        final bookingId = uri.queryParameters['bookingId'];
+        final token = uri.queryParameters['token'];
+        final requestedBy = Uri.decodeComponent(uri.queryParameters['requestedBy'] ?? '');
+        final reason = Uri.decodeComponent(uri.queryParameters['reason'] ?? '');
+
+        if (bookingId != null && token != null) {
+          return PublicRoomCancellationApprovalPage(
+            bookingId: bookingId,
+            token: token,
+            requestedBy: requestedBy,
+            reason: reason,
+          );
         }
-      } catch (e) {
-        print('❌ Error parsing web URL: $e');
       }
+
+      if (uri.path == '/display') {
+        return const RoomDisplayPage();
+      } else if (uri.path.contains('/room-cancellation-approval')) {
+        final bookingId = uri.queryParameters['bookingId'];
+        final token = uri.queryParameters['token'];
+        final requestedBy = Uri.decodeComponent(uri.queryParameters['requestedBy'] ?? '');
+        final reason = Uri.decodeComponent(uri.queryParameters['reason'] ?? '');
+        if (bookingId != null && token != null) {
+          return PublicRoomCancellationApprovalPage(
+            bookingId: bookingId, token: token,
+            requestedBy: requestedBy, reason: reason,
+          );
+        }
+      } else if (uri.path.contains('/cancellation-approval')) {
+        final bookingId = uri.queryParameters['bookingId'];
+        final token = uri.queryParameters['token'];
+        final requestedBy = Uri.decodeComponent(uri.queryParameters['requestedBy'] ?? '');
+        final reason = Uri.decodeComponent(uri.queryParameters['reason'] ?? '');
+        if (bookingId != null && token != null) {
+          return PublicCancellationApprovalPage(
+            bookingId: bookingId, token: token,
+            requestedBy: requestedBy, reason: reason,
+          );
+        }
+      } else if (uri.path.contains('/gym-approval')) {
+        final bookingId = uri.queryParameters['bookingId'];
+        final token = uri.queryParameters['token'];
+        if (bookingId != null && token != null) {
+          return PublicGymApprovalPage(bookingId: bookingId, token: token);
+        }
+      } else if (uri.path.contains('/room-approval')) {
+        final bookingId = uri.queryParameters['bookingId'];
+        final token = uri.queryParameters['token'];
+        if (bookingId != null && token != null) {
+          return PublicRoomApprovalPage(bookingId: bookingId, token: token);
+        }
+      } else if (uri.path.contains('/approval')) {
+        final bookingId = uri.queryParameters['bookingId'];
+        final token = uri.queryParameters['token'];
+        if (bookingId != null && token != null) {
+          return PublicApprovalPage(bookingId: bookingId, token: token);
+        }
+      }
+    } catch (e) {
+      print('❌ Error parsing web URL: $e');
     }
-    
-    // ✅ Prioritas 2: Cek status login (untuk halaman normal)
-    return const AuthWrapper();
   }
+
+  return const AuthWrapper();
+}
 
   @override
   void dispose() {
@@ -161,6 +209,15 @@ class _PintraAppState extends State<PintraApp> {
       debugShowCheckedModeBanner: false,
       title: 'PINTRA',
       navigatorKey: _navigatorKey,
+        localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('id', 'ID'),
+        Locale('en', 'US'),
+      ],
       theme: ThemeData(
         fontFamily: 'Poppins',
       ),
@@ -171,6 +228,28 @@ class _PintraAppState extends State<PintraApp> {
         if (kIsWeb && settings.name != null) {
           final uri = Uri.parse(settings.name!);
           
+            if (uri.path == '/display') {
+            return MaterialPageRoute(
+              builder: (_) => const RoomDisplayPage(),
+              settings: settings,
+            );
+          }
+
+          if (uri.path == '/room-approval') {
+            final bookingId = uri.queryParameters['bookingId'];
+            final token = uri.queryParameters['token'];
+
+            if (bookingId != null && token != null) {
+              return MaterialPageRoute(
+                builder: (_) => PublicRoomApprovalPage(
+                  bookingId: bookingId,
+                  token: token,
+                ),
+                settings: settings,
+              );
+            }
+          }
+
           if (uri.path == '/approval') {
             final bookingId = uri.queryParameters['bookingId'];
             final token = uri.queryParameters['token'];
@@ -185,6 +264,36 @@ class _PintraAppState extends State<PintraApp> {
               );
             }
           }
+
+          if (uri.path == '/room-cancellation-approval') {
+            final bookingId = uri.queryParameters['bookingId'];
+            final token = uri.queryParameters['token'];
+            final requestedBy = Uri.decodeComponent(uri.queryParameters['requestedBy'] ?? '');
+            final reason = Uri.decodeComponent(uri.queryParameters['reason'] ?? '');
+
+            if (bookingId != null && token != null) {
+              return MaterialPageRoute(
+                builder: (_) => PublicRoomCancellationApprovalPage(
+                  bookingId: bookingId,
+                  token: token,
+                  requestedBy: requestedBy,
+                  reason: reason,
+                ),
+                settings: settings,
+              );
+            }
+          }
+          if (uri.path == '/gym-approval') {
+            final bookingId = uri.queryParameters['bookingId'];
+            final token = uri.queryParameters['token'];
+            if (bookingId != null && token != null) {
+              return MaterialPageRoute(
+                builder: (_) => PublicGymApprovalPage(bookingId: bookingId, token: token),
+                settings: settings,
+              );
+            }
+          }
+
         }
         
         switch (settings.name) {
@@ -213,8 +322,6 @@ class _PintraAppState extends State<PintraApp> {
   }
 }
 
-// ✅ TAMBAHKAN Widget AuthWrapper
-// ✅ FIX Widget AuthWrapper
 class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
 

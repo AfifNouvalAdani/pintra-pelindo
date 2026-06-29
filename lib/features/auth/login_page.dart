@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../dashboard/dashboard_page.dart';
+import 'package:flutter/foundation.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -66,7 +66,9 @@ Future<void> loginWithNipp() async {
     }
 
     // ✅ Set persistence SEBELUM login (untuk web)
-    await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+    if (kIsWeb) {
+      await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+    }
 
     // Simpan login info jika rememberMe dicentang
     await _saveLoginInfo(nipp, password);
@@ -242,7 +244,6 @@ Future<void> loginWithNipp() async {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header dengan logo dan help
                 Padding(
                   padding: const EdgeInsets.all(24),
                   child: Row(
@@ -270,7 +271,6 @@ Future<void> loginWithNipp() async {
 
                 const SizedBox(height: 40),
 
-                // Logo aplikasi
                 Center(
                   child: Column(
                     children: [
@@ -558,17 +558,9 @@ Future<void> loginWithNipp() async {
                         color: Colors.grey.shade200,
                       ),
                       const SizedBox(height: 16),
-                      Text(
-                        'Sistem Peminjaman Kendaraan Operasional',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
                       const SizedBox(height: 8),
                       Text(
-                        '© 2024 PT Pelabuhan Indonesia (Persero)',
+                        '© 2026 PT Pelindo Sub Regional Jawa',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade500,

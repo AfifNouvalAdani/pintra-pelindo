@@ -9,6 +9,40 @@ import '../vehicle/detail_peminjaman_page.dart';
 import '../profile/profile_page.dart';
 import '../admin/manajemen_user_page.dart';
 import 'package:pintra/features/admin/manajemen_kendaraan_page.dart';
+import '../services/auto_cancel_service.dart';
+import 'dart:async';
+import 'package:pintra/features/admin/manajemen_ruang_meeting_page.dart';
+import '../admin/laporan_peminjaman_kendaraan_page.dart';
+import '../ruang_meeting/meeting_room_booking_form_page.dart';
+import '../ruang_meeting/approval_ruang_meeting_page.dart';
+import '../services/meeting_room_auto_complete_service.dart';
+import '../admin/dashboard_monitoring_page.dart';
+import '../ruang_meeting/detail_peminjaman_ruang_meeting_page.dart';
+import 'ai_chatbot_widget.dart';
+import '../gym/gym_booking_form_page.dart';
+import '../gym/approval_gym_page.dart';
+import '../gym/detail_peminjaman_gym_page.dart';
+import '../services/gym_auto_complete_service.dart';
+import '../admin/laporan_peminjaman_ruang_meeting_page.dart';
+import '../admin/laporan_peminjaman_gym_page.dart';
+import 'dart:convert'; // untuk base64Decode
+import 'package:carousel_slider/carousel_slider.dart';
+import '../setting/banner_service.dart'; // sesuaikan path dengan lokasi file banner_service.dart Anda
+import '../setting/home_banner.dart';
+
+// Model kecil untuk data laporan
+class _ReportItem {
+  final String title;
+  final IconData icon;
+  final MaterialColor color;
+  final VoidCallback onTap;
+  const _ReportItem({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+}
 
 // Helper Widget untuk Approval Popup
 class _ApprovalItem extends StatelessWidget {
@@ -70,14 +104,28 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _isLoadingJabatan = true;
   Map<String, String>? _userProfileData;
   bool _isLoadingProfileData = false;
+  Timer? _reminderTimer;
+  
+  final BannerService _bannerService = BannerService();
+
+  // ===== TAMBAHAN: Spesialisasi Operator =====
+  String? _userOperatorType; // null = umum, 'kendaraan', 'ruang_meeting'
 
   @override
   void initState() {
     super.initState();
+    _checkExpiredBookings();
+    _checkExpiredMeetingBookings();
+    _checkExpiredGymBookings();
     _currentIndex = 0;
     initializeDateFormatting('id_ID', null);
     _fetchUserJabatan();
     _fetchUserProfileData();
+    _startReminderTimer();
+  }
+
+  Future<void> _checkExpiredGymBookings() async {
+  await GymAutoCompleteService.checkAndCompleteExpiredBookings();
   }
 
   bool get _isManagerDivisi {
@@ -85,22 +133,52 @@ class _DashboardPageState extends State<DashboardPage> {
     return jab.contains('manager');
   }
 
-  // Ambil jabatan user dari Firestore
+  Future<void> _checkExpiredMeetingBookings() async {
+    await MeetingRoomAutoCompleteService.checkAndCompleteExpiredBookings();
+  }
+
+  Future<void> _checkExpiredBookings() async {
+    await AutoCancelService.checkAndCancelExpiredBookings();
+  }
+
+  void _startReminderTimer() {
+    print('⏰ Starting reminder timer...');
+    AutoCancelService.checkAndSendReturnReminders();
+    _reminderTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      final now = DateTime.now();
+      print('⏰ [${now.hour}:${now.minute}] Periodic reminder check triggered');
+      AutoCancelService.checkAndSendReturnReminders();
+    });
+    print('✅ Reminder timer started (every 1 minute)');
+  }
+
+  @override
+  void dispose() {
+    _reminderTimer?.cancel();
+    super.dispose();
+  }
+
+  // Ambil jabatan user dari Firestore (dan operatorType)
   Future<void> _fetchUserJabatan() async {
     try {
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userId)
           .get();
-      
+
       if (userDoc.exists) {
+        final data = userDoc.data()!;
         setState(() {
-          _userJabatan = userDoc.data()?['jabatan'] ?? 'Staff';
+          _userJabatan = data['jabatan'] ?? 'Staff';
+          _userOperatorType = widget.role == 'operator'
+              ? data['operatorType'] as String?
+              : null;
           _isLoadingJabatan = false;
         });
       } else {
         setState(() {
           _userJabatan = 'Staff';
+          _userOperatorType = null;
           _isLoadingJabatan = false;
         });
       }
@@ -108,6 +186,7 @@ class _DashboardPageState extends State<DashboardPage> {
       print('Error fetching user jabatan: $e');
       setState(() {
         _userJabatan = 'Staff';
+        _userOperatorType = null;
         _isLoadingJabatan = false;
       });
     }
@@ -124,7 +203,7 @@ class _DashboardPageState extends State<DashboardPage> {
           .collection('users')
           .doc(widget.userId)
           .get();
-      
+
       if (userDoc.exists) {
         final data = userDoc.data()!;
         setState(() {
@@ -159,6 +238,35 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  Widget _buildDefaultBanner() {
+  return Container(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(12),
+      image: const DecorationImage(
+        image: AssetImage('assets/images/banner-dashboard.png'),
+        fit: BoxFit.cover,
+      ),
+    ),
+  );
+}
+
+Widget _buildBannerImage(String base64String) {
+  if (base64String.isEmpty) return _buildDefaultBanner();
+  try {
+    final clean = base64String.contains(',')
+        ? base64String.split(',').last
+        : base64String;
+    return Image.memory(
+      base64Decode(clean),
+      fit: BoxFit.cover,
+      width: double.infinity,
+      errorBuilder: (_, __, ___) => _buildDefaultBanner(),
+    );
+  } catch (_) {
+    return _buildDefaultBanner();
+  }
+}
+
   // Cek apakah user memiliki peminjaman aktif
   Future<Map<String, dynamic>?> _checkActiveBooking() async {
     try {
@@ -169,7 +277,7 @@ class _DashboardPageState extends State<DashboardPage> {
           .orderBy('createdAt', descending: true)
           .limit(1)
           .get();
-      
+
       if (snapshot.docs.isNotEmpty) {
         final doc = snapshot.docs.first;
         return {
@@ -244,26 +352,24 @@ class _DashboardPageState extends State<DashboardPage> {
     ];
 
     if (widget.role == 'user') {
-      // Gunakan _isManagerDivisi, BUKAN _userJabatan == 'Manager'
       if (_isManagerDivisi) {
-        // Manager Divisi (role tetap user) -> dapat menu Approval
         return [
-          allMenus[0], // Peminjaman Mobil
-          allMenus[2], // Peminjaman Ruang Meeting
-          allMenus[4], // Peminjaman Ruang Gym
-          allMenus[5], // Approval Peminjaman
-            ];
+          allMenus[0],
+          allMenus[2],
+          allMenus[4],
+          allMenus[5],
+        ];
       } else {
         return [
-          allMenus[0], // Peminjaman Mobil
-          allMenus[2], // Peminjaman Ruang Meeting
-          allMenus[4], // Peminjaman Ruang Gym
+          allMenus[0],
+          allMenus[2],
+          allMenus[4],
         ];
       }
     } else if (widget.role == 'admin') {
       return allMenus;
     } else if (widget.role == 'operator') {
-      return allMenus.where((menu) => menu.title != 'Manajemen User').toList();
+      return allMenus;
     } else if (widget.role == 'manager_umum') {
       return allMenus.where((menu) => menu.title != 'Manajemen User').toList();
     }
@@ -271,192 +377,611 @@ class _DashboardPageState extends State<DashboardPage> {
     return allMenus;
   }
 
-  // Fungsi untuk mengambil statistik kendaraan
+  Widget _buildGymBookingCard(Map<String, dynamic> booking) {
+  final peminjam = booking['peminjam'] as Map<String, dynamic>? ?? {};
+  final status = booking['status'] ?? 'UNKNOWN';
+  final waktuMulai = booking['waktuMulai'] as Timestamp?;
+  final waktuSelesai = booking['waktuSelesai'] as Timestamp?;
+  final peminjamNama = peminjam['nama'] ?? '-';
+  final peminjamDivisi = peminjam['divisi'] ?? '-';
+  final catatan = booking['catatan'] ?? '-';
+
+  final bool isApprovalMode = widget.role != 'user' ||
+      (widget.role == 'user' && _isManagerDivisi);
+
+  return GestureDetector(
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DetailPeminjamanGymPage(
+            data: booking,
+            role: widget.role,
+            userName: widget.userName,
+            userId: widget.userId,
+            userDivision: widget.userDivision,
+            isApprovalMode: isApprovalMode,
+            operatorType: _userOperatorType,
+          ),
+        ),
+      ).then((_) {
+        setState(() {});
+      });
+    },
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(Icons.fitness_center_outlined,
+                        size: 16, color: Colors.orange.shade600),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        peminjamNama,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade800,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: DashboardHelpers.getStatusColor(status).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: DashboardHelpers.getStatusColor(status)),
+                ),
+                child: Text(
+                  DashboardHelpers.getStatusLabel(status),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: DashboardHelpers.getStatusColor(status),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.arrow_forward_ios_rounded,
+                  size: 14, color: Colors.grey.shade400),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (widget.role != 'user' || (widget.role == 'user' && _isManagerDivisi)) ...[
+            Row(
+              children: [
+                Icon(Icons.person, size: 14, color: Colors.grey.shade500),
+                const SizedBox(width: 4),
+                Text('Peminjam: $peminjamNama',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.business, size: 14, color: Colors.grey.shade500),
+                const SizedBox(width: 4),
+                Text('Divisi: $peminjamDivisi',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+              ],
+            ),
+            const SizedBox(height: 4),
+          ],
+          if (catatan != '-' && catatan.isNotEmpty) ...[
+            Row(
+              children: [
+                Icon(Icons.notes_outlined, size: 14, color: Colors.grey.shade500),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    'Catatan: $catatan',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+          ],
+          Row(
+            children: [
+              Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade500),
+              const SizedBox(width: 6),
+              Text(
+                '${DashboardHelpers.formatDate(waktuMulai)} - ${DashboardHelpers.formatDate(waktuSelesai)}',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
   Future<Map<String, int>> _getVehicleStats() async {
     try {
-      // 1. Ambil semua kendaraan aktif
       final vehiclesSnapshot = await FirebaseFirestore.instance
           .collection('vehicles')
           .where('statusAktif', isEqualTo: true)
           .get();
-      
-      // 2. Ambil kendaraan yang sedang dipinjam (status ON_GOING)
-      final ongoingBookingsSnapshot = await FirebaseFirestore.instance
+
+      final totalVehicles = vehiclesSnapshot.docs.length;
+
+      final bookingsSnapshot = await FirebaseFirestore.instance
           .collection('vehicle_bookings')
           .where('status', isEqualTo: 'ON_GOING')
           .get();
-      
+
+      final unavailableVehicleIds = <String>{};
+
+      for (final doc in bookingsSnapshot.docs) {
+        final data = doc.data();
+        final vehicleId = data['vehicleId'] as String?;
+        if (vehicleId != null) {
+          unavailableVehicleIds.add(vehicleId);
+        }
+      }
+
+      final unavailableCount = unavailableVehicleIds.length;
+      final availableCount = (totalVehicles - unavailableCount).clamp(0, totalVehicles);
+
       return {
-        'totalVehicles': vehiclesSnapshot.docs.length,
-        'ongoingBookings': ongoingBookingsSnapshot.docs.length,
+        'totalVehicles': totalVehicles,
+        'ongoingBookings': unavailableCount,
+        'availableVehicles': availableCount,
       };
     } catch (e) {
       print('Error fetching vehicle stats: $e');
-      return {'totalVehicles': 0, 'ongoingBookings': 0};
+      return {
+        'totalVehicles': 0,
+        'ongoingBookings': 0,
+        'availableVehicles': 0,
+      };
     }
   }
 
-  // Fungsi untuk mengambil booking terbaru - LOGIKA DIPERBAIKI!
-  Future<List<Map<String, dynamic>>> _getRecentBookings() async {
-    try {
-      if (_isLoadingJabatan) {
-        return [];
-      }
+Future<List<Map<String, dynamic>>> _getRecentBookings() async {
+  try {
+    if (_isLoadingJabatan) return [];
 
-      QuerySnapshot snapshot;
-      
-      if (widget.role == 'user') {
-        // Gunakan _isManagerDivisi
-        if (_isManagerDivisi) {
-          // Manager Divisi: melihat SUBMITTED dari divisinya
-          snapshot = await FirebaseFirestore.instance
+    // ===================== USER BIASA =====================
+    if (widget.role == 'user') {
+      if (_isManagerDivisi) {
+        List<Map<String, dynamic>> kendaraanDocs = [];
+        List<Map<String, dynamic>> meetingDocs = [];
+        List<Map<String, dynamic>> gymDocs = [];
+
+        try {
+          final snap = await FirebaseFirestore.instance
               .collection('vehicle_bookings')
               .where('divisi', isEqualTo: widget.userDivision)
               .where('status', isEqualTo: 'SUBMITTED')
               .orderBy('createdAt', descending: true)
-              .limit(5)
+              .limit(3)
               .get();
-          
-          print('Found ${snapshot.docs.length} bookings for Manager Divisi (SUBMITTED)');
-          
-          return snapshot.docs.map((doc) {
+          kendaraanDocs = snap.docs.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
             return {'id': doc.id, ...data};
           }).toList();
-        } else {
-          // User biasa: ambil semua bookingnya
-          snapshot = await FirebaseFirestore.instance
+        } catch (e) {
+          print('Error fetching vehicle bookings manager divisi: $e');
+        }
+
+        try {
+          final snap = await FirebaseFirestore.instance
+              .collection('room_bookings')
+              .where('peminjam.divisi', isEqualTo: widget.userDivision)
+              .where('status', isEqualTo: 'SUBMITTED')
+              .get();
+          meetingDocs = snap.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return {'id': doc.id, '_isMeetingBooking': true, ...data};
+          }).toList();
+        } catch (e) {
+          print('Error fetching room bookings manager divisi: $e');
+        }
+
+        try {
+          final snap = await FirebaseFirestore.instance
+              .collection('gym_bookings')
+              .where('peminjam.divisi', isEqualTo: widget.userDivision)
+              .where('status', isEqualTo: 'SUBMITTED')
+              .get();
+          gymDocs = snap.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return {'id': doc.id, '_isGymBooking': true, ...data};
+          }).toList();
+        } catch (e) {
+          print('Error fetching gym bookings manager divisi: $e');
+        }
+
+        final combined = [...kendaraanDocs, ...meetingDocs, ...gymDocs];
+        combined.sort((a, b) {
+          final aT = (a['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+          final bT = (b['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+          return bT.compareTo(aT);
+        });
+        return combined.take(5).toList();
+
+      } else {
+        List<Map<String, dynamic>> kendaraanDocs = [];
+        List<Map<String, dynamic>> meetingDocs = [];
+        List<Map<String, dynamic>> gymDocs = [];
+
+        try {
+          final snap = await FirebaseFirestore.instance
               .collection('vehicle_bookings')
               .where('peminjamId', isEqualTo: widget.userId)
               .orderBy('createdAt', descending: true)
-              .limit(20)
+              .limit(3)
               .get();
-                
-          // Filter untuk user biasa (semua status)
-          List<String> allowedStatuses = ['SUBMITTED', 'APPROVAL_1', 'APPROVAL_2', 'APPROVAL_3', 'ON_GOING', 'DONE', 'CANCELLED'];
-          
-          final filtered = snapshot.docs.where((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return allowedStatuses.contains(data['status']);
-          }).take(5).toList();
-          
-          return filtered.map((doc) {
+          kendaraanDocs = snap.docs.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
             return {'id': doc.id, ...data};
           }).toList();
+        } catch (e) {
+          print('Error fetching vehicle bookings user: $e');
         }
-              
-      } else if (widget.role == 'admin') {
-        // Manager Umum: melihat booking yang APPROVAL_2
-        snapshot = await FirebaseFirestore.instance
-            .collection('vehicle_bookings')
-            .where('status', isEqualTo: 'APPROVAL_2')
-            .orderBy('createdAt', descending: true)
-            .limit(5)
-            .get();
-        
-        print('Found ${snapshot.docs.length} bookings for Manager Umum (APPROVAL_2)');
-        
-        return snapshot.docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          return {'id': doc.id, ...data};
-        }).toList();
-            
-      } else if (widget.role == 'operator') {
-        // Operator: melihat booking yang APPROVAL_1
-        snapshot = await FirebaseFirestore.instance
-            .collection('vehicle_bookings')
-            .where('status', isEqualTo: 'APPROVAL_1')
-            .orderBy('createdAt', descending: true)
-            .limit(5)
-            .get();
-        
-        print('Found ${snapshot.docs.length} bookings for operator (APPROVAL_1)');
-        
-        return snapshot.docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          return {'id': doc.id, ...data};
-        }).toList();
-              
-      } else if (widget.role == 'manager_umum') {
-        // Manager Umum (alternatif): melihat booking yang APPROVAL_2
-        snapshot = await FirebaseFirestore.instance
-            .collection('vehicle_bookings')
-            .where('status', isEqualTo: 'APPROVAL_2')
-            .orderBy('createdAt', descending: true)
-            .limit(5)
-            .get();
-        
-        print('Found ${snapshot.docs.length} bookings for manager_umum (APPROVAL_2)');
-        
-        return snapshot.docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          return {'id': doc.id, ...data};
-        }).toList();
-              
-      } else {
-        return [];
+
+        try {
+          final snap = await FirebaseFirestore.instance
+              .collection('room_bookings')
+              .where('peminjam.userId', isEqualTo: widget.userId)
+              .get();
+          meetingDocs = snap.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return {'id': doc.id, '_isMeetingBooking': true, ...data};
+          }).toList();
+        } catch (e) {
+          print('Error fetching room bookings user: $e');
+        }
+
+        try {
+          final snap = await FirebaseFirestore.instance
+              .collection('gym_bookings')
+              .where('peminjam.userId', isEqualTo: widget.userId)
+              .get();
+          gymDocs = snap.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return {'id': doc.id, '_isGymBooking': true, ...data};
+          }).toList();
+        } catch (e) {
+          print('Error fetching gym bookings user: $e');
+        }
+
+        final combined = [...kendaraanDocs, ...meetingDocs, ...gymDocs];
+        combined.sort((a, b) {
+          final aT = (a['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+          final bT = (b['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+          return bT.compareTo(aT);
+        });
+        return combined.take(5).toList();
       }
-      
-    } catch (e) {
-      print('Error fetching recent bookings: $e');
-      return [];
     }
-  }
 
-  // Fungsi untuk mengambil jumlah approval yang menunggu - LOGIKA DIPERBAIKI!
-  Future<int> _getPendingApprovalCount() async {
-    try {
-      if (_isLoadingJabatan) {
-        return 0;
+    // ===================== ADMIN / MANAGER UMUM =====================
+    if (widget.role == 'admin' || widget.role == 'manager_umum') {
+      List<Map<String, dynamic>> kendaraanDocs = [];
+      List<Map<String, dynamic>> meetingDocs = [];
+      List<Map<String, dynamic>> gymDocs = [];
+
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('vehicle_bookings')
+            .where('status', isEqualTo: 'APPROVAL_2')
+            .orderBy('createdAt', descending: true)
+            .limit(3)
+            .get();
+        kendaraanDocs = snap.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return {'id': doc.id, ...data};
+        }).toList();
+      } catch (e) {
+        print('Error fetching vehicle bookings admin: $e');
       }
 
-      Query query = FirebaseFirestore.instance.collection('vehicle_bookings');
-      
-      if (widget.role == 'admin') {
-        // Manager Umum: hitung APPROVAL_2
-        query = query.where('status', isEqualTo: 'APPROVAL_2');
-              
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('room_bookings')
+            .where('status', isEqualTo: 'APPROVAL_2')
+            .orderBy('createdAt', descending: true)
+            .limit(3)
+            .get();
+        meetingDocs = snap.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return {'id': doc.id, '_isMeetingBooking': true, ...data};
+        }).toList();
+      } catch (e) {
+        print('Error fetching room bookings admin: $e');
+      }
+
+      final combined = [...kendaraanDocs, ...meetingDocs];
+      combined.sort((a, b) {
+        final aT = (a['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+        final bT = (b['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+        return bT.compareTo(aT);
+      });
+      return combined.take(5).toList();
+    }
+
+    // ===================== OPERATOR =====================
+    if (widget.role == 'operator') {
+      if (_userOperatorType == 'ruang_meeting') {
+        List<Map<String, dynamic>> meetingDocs = [];
+        List<Map<String, dynamic>> gymDocs = [];
+
+        try {
+          final snap = await FirebaseFirestore.instance
+              .collection('room_bookings')
+              .where('status', isEqualTo: 'APPROVAL_1')
+              .orderBy('createdAt', descending: true)
+              .limit(3)
+              .get();
+          meetingDocs = snap.docs
+              .where((doc) {
+                final data = doc.data();
+                final peminjam = data['peminjam'] as Map<String, dynamic>? ?? {};
+                return peminjam['userId'] != widget.userId;
+              })
+              .map((doc) => {'id': doc.id, '_isMeetingBooking': true, ...doc.data()})
+              .toList();
+        } catch (e) {
+          print('Error fetching room bookings operator ruang_meeting: $e');
+        }
+
+        try {
+          final snap = await FirebaseFirestore.instance
+              .collection('gym_bookings')
+              .where('status', isEqualTo: 'PENDING')
+              .orderBy('createdAt', descending: true)
+              .limit(3)
+              .get();
+          gymDocs = snap.docs
+              .where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final peminjam = data['peminjam'] as Map<String, dynamic>? ?? {};
+                return peminjam['userId'] != widget.userId;
+              })
+              .map((doc) => {'id': doc.id, '_isGymBooking': true, ...doc.data() as Map<String, dynamic>})
+              .toList();
+        } catch (e) {
+          print('Error fetching gym bookings operator ruang_meeting: $e');
+        }
+
+        final combined = [...meetingDocs, ...gymDocs];
+        combined.sort((a, b) {
+          final aT = (a['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+          final bT = (b['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+          return bT.compareTo(aT);
+        });
+        return combined.take(5).toList();
+
+      } else if (_userOperatorType == 'kendaraan') {
+        try {
+          final snap = await FirebaseFirestore.instance
+              .collection('vehicle_bookings')
+              .where('status', isEqualTo: 'APPROVAL_1')
+              .orderBy('createdAt', descending: true)
+              .limit(5)
+              .get();
+          return snap.docs
+              .where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return data['peminjamId'] != widget.userId;
+              })
+              .map((doc) => {'id': doc.id, ...doc.data() as Map<String, dynamic>})
+              .toList();
+        } catch (e) {
+          print('Error fetching vehicle bookings operator kendaraan: $e');
+          return [];
+        }
+
+      } else {
+        List<Map<String, dynamic>> kendaraanDocs = [];
+        List<Map<String, dynamic>> meetingDocs = [];
+        List<Map<String, dynamic>> gymDocs = [];
+
+        try {
+          final snap = await FirebaseFirestore.instance
+              .collection('vehicle_bookings')
+              .where('status', isEqualTo: 'APPROVAL_1')
+              .orderBy('createdAt', descending: true)
+              .limit(3)
+              .get();
+          kendaraanDocs = snap.docs
+              .where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return data['peminjamId'] != widget.userId;
+              })
+              .map((doc) => {'id': doc.id, ...doc.data() as Map<String, dynamic>})
+              .toList();
+        } catch (e) {
+          print('Error fetching vehicle bookings operator umum: $e');
+        }
+
+        try {
+          final snap = await FirebaseFirestore.instance
+              .collection('room_bookings')
+              .where('status', isEqualTo: 'APPROVAL_1')
+              .orderBy('createdAt', descending: true)
+              .limit(3)
+              .get();
+          meetingDocs = snap.docs
+              .where((doc) {
+                final data = doc.data();
+                final peminjam = data['peminjam'] as Map<String, dynamic>? ?? {};
+                return peminjam['userId'] != widget.userId;
+              })
+              .map((doc) => {'id': doc.id, '_isMeetingBooking': true, ...doc.data()})
+              .toList();
+        } catch (e) {
+          print('Error fetching room bookings operator umum: $e');
+        }
+
+        try {
+          final snap = await FirebaseFirestore.instance
+              .collection('gym_bookings')
+              .where('status', isEqualTo: 'PENDING')
+              .orderBy('createdAt', descending: true)
+              .limit(3)
+              .get();
+          gymDocs = snap.docs
+              .where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final peminjam = data['peminjam'] as Map<String, dynamic>? ?? {};
+                return peminjam['userId'] != widget.userId;
+              })
+              .map((doc) => {'id': doc.id, '_isGymBooking': true, ...doc.data() as Map<String, dynamic>})
+              .toList();
+        } catch (e) {
+          print('Error fetching gym bookings operator umum: $e');
+        }
+
+        final combined = [...kendaraanDocs, ...meetingDocs, ...gymDocs];
+        combined.sort((a, b) {
+          final aT = (a['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+          final bT = (b['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+          return bT.compareTo(aT);
+        });
+        return combined.take(5).toList();
+      }
+    }
+
+    return [];
+  } catch (e) {
+    print('Error fetching recent bookings: $e');
+    return [];
+  }
+}
+Future<int> _getPendingApprovalCount() async {
+  try {
+    if (_isLoadingJabatan) return 0;
+
+    int kendaraanCount = 0;
+    int meetingCount = 0;
+    int gymCount = 0;
+
+    final bool countKendaraan = widget.role == 'admin' ||
+        widget.role == 'manager_umum' ||
+        (widget.role == 'user' && _isManagerDivisi) ||
+        (widget.role == 'operator' &&
+            (_userOperatorType == null || _userOperatorType == 'kendaraan'));
+
+    if (countKendaraan) {
+      Query q = FirebaseFirestore.instance.collection('vehicle_bookings');
+      if (widget.role == 'admin' || widget.role == 'manager_umum') {
+        q = q.where('status', isEqualTo: 'APPROVAL_2');
       } else if (widget.role == 'user' && _isManagerDivisi) {
-        // Gunakan _isManagerDivisi
-        // Manager Divisi: hitung SUBMITTED dari divisinya
-        query = query
-            .where('status', isEqualTo: 'SUBMITTED')
-            .where('divisi', isEqualTo: widget.userDivision);
-          
+        q = q.where('status', isEqualTo: 'SUBMITTED')
+             .where('divisi', isEqualTo: widget.userDivision);
       } else if (widget.role == 'operator') {
-        // Operator: hitung APPROVAL_1
-        query = query.where('status', isEqualTo: 'APPROVAL_1');
-          
-      } else if (widget.role == 'manager_umum') {
-        // Manager Umum (alternatif): hitung APPROVAL_2
-        query = query.where('status', isEqualTo: 'APPROVAL_2');
-          
-      } else {
+        q = q.where('status', isEqualTo: 'APPROVAL_1');
+      }
+      final snap = await q.get();
+      kendaraanCount = snap.docs.length;
+    }
+
+    final bool countMeeting = widget.role == 'admin' ||
+        widget.role == 'manager_umum' ||
+        (widget.role == 'user' && _isManagerDivisi) ||
+        (widget.role == 'operator' &&
+            (_userOperatorType == null || _userOperatorType == 'ruang_meeting'));
+
+    if (countMeeting) {
+      Query q = FirebaseFirestore.instance.collection('room_bookings');
+      if (widget.role == 'admin' || widget.role == 'manager_umum') {
+        q = q.where('status', isEqualTo: 'APPROVAL_2');
+      } else if (widget.role == 'user' && _isManagerDivisi) {
+        q = q.where('status', isEqualTo: 'SUBMITTED')
+             .where('peminjam.divisi', isEqualTo: widget.userDivision);
+      } else if (widget.role == 'operator') {
+        q = q.where('status', isEqualTo: 'APPROVAL_1');
+      }
+      final snap = await q.get();
+      meetingCount = snap.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final peminjam = data['peminjam'] as Map<String, dynamic>? ?? {};
+        return peminjam['userId'] != widget.userId;
+      }).length;
+    }
+
+    final bool countGym = widget.role == 'operator' &&
+        (_userOperatorType == null || _userOperatorType == 'ruang_meeting');
+
+    if (countGym) {
+      final snap = await FirebaseFirestore.instance
+          .collection('gym_bookings')
+          .where('status', isEqualTo: 'PENDING')
+          .get();
+      gymCount = snap.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final peminjam = data['peminjam'] as Map<String, dynamic>? ?? {};
+        return peminjam['userId'] != widget.userId;
+      }).length;
+    }
+
+        return kendaraanCount + meetingCount + gymCount;
+      } catch (e) {
+        print('Error fetching pending approval count: $e');
         return 0;
       }
-      
-      final snapshot = await query.get();
-      return snapshot.docs.length;
-        
-    } catch (e) {
-      print('Error fetching pending approval count: $e');
-      return 0;
     }
-  }
 
-  // Cek apakah user memiliki akses approval - LOGIKA DIPERBAIKI!
   bool _hasAccessToApproval() {
     if (widget.role == 'admin') return true;
     if (widget.role == 'operator') return true;
     if (widget.role == 'manager_umum') return true;
-    // Gunakan _isManagerDivisi
     if (widget.role == 'user' && _isManagerDivisi) return true;
     return false;
   }
 
-  // Popup untuk Approval
   void _showApprovalPopup() {
+    // Operator dengan spesialisasi: langsung navigasi
+  if (widget.role == 'operator' && _userOperatorType == 'kendaraan') {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ApprovalKendaraanPage(
+          role: widget.role,
+          userName: widget.userName,
+          userId: widget.userId,
+          userDivision: widget.userDivision,
+          userJabatan: _userJabatan ?? 'Staff',
+          operatorType: _userOperatorType,
+        ),
+      ),
+    );
+    return;
+  }
+
+  // Operator ruang_meeting: popup dengan pilihan ruang meeting + gym
+  if (widget.role == 'operator' && _userOperatorType == 'ruang_meeting') {
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -472,45 +997,183 @@ class _DashboardPageState extends State<DashboardPage> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  InkWell(
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ApprovalKendaraanPage(
-                            role: widget.role,
-                            userName: widget.userName,
-                            userId: widget.userId,
-                            userDivision: widget.userDivision,
-                            userJabatan: _userJabatan ?? 'Staff',
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      InkWell(
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ApprovalRuangMeetingPage(
+                                role: widget.role,
+                                userName: widget.userName,
+                                userId: widget.userId,
+                                userDivision: widget.userDivision,
+                                userJabatan: _userJabatan ?? 'Staff',
+                                operatorType: _userOperatorType,
+                              ),
+                            ),
+                          );
+                        },
+                        child: const _ApprovalItem(
+                          icon: Icons.meeting_room,
+                          label: 'Approval\nRuang Meeting',
+                        ),
+                      ),
+                      InkWell(
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ApprovalGymPage(
+                                role: widget.role,
+                                userName: widget.userName,
+                                userId: widget.userId,
+                                userDivision: widget.userDivision,
+                                userJabatan: _userJabatan ?? 'Staff',
+                                operatorType: _userOperatorType,
+                              ),
+                            ),
+                          );
+                        },
+                        child: const _ApprovalItem(
+                          icon: Icons.fitness_center,
+                          label: 'Approval\nRuang Gym',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    return;
+  }
+
+    // Operator umum / admin / manager: tampilkan popup
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black.withOpacity(0.4),
+      builder: (_) {
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.75,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Label "Operator Umum" jika operator tanpa spesialisasi
+                  if (widget.role == 'operator' && _userOperatorType == null) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Text(
+                        'Operator Umum — Akses Semua',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue.shade700),
+                      ),
+                    ),
+                  ],
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        InkWell(
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ApprovalKendaraanPage(
+                                  role: widget.role,
+                                  userName: widget.userName,
+                                  userId: widget.userId,
+                                  userDivision: widget.userDivision,
+                                  userJabatan: _userJabatan ?? 'Staff',
+                                  operatorType: _userOperatorType,
+                                ),
+                              ),
+                            );
+                          },
+                          child: const _ApprovalItem(
+                            icon: Icons.directions_car,
+                            label: 'Approval\nKendaraan',
                           ),
                         ),
-                      );
-                    },
-                    child: const _ApprovalItem(
-                      icon: Icons.directions_car,
-                      label: 'Approval\nKendaraan',
-                    ),
-                  ),
-                  InkWell(
-                    onTap: () {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Fitur Approval Ruang Meeting dalam pengembangan'),
-                          backgroundColor: Colors.orange,
+                        InkWell(
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ApprovalRuangMeetingPage(
+                                  role: widget.role,
+                                  userName: widget.userName,
+                                  userId: widget.userId,
+                                  userDivision: widget.userDivision,
+                                  userJabatan: _userJabatan ?? 'Staff',
+                                  operatorType: _userOperatorType,
+                                ),
+                              ),
+                            );
+                          },
+                          child: const _ApprovalItem(
+                            icon: Icons.meeting_room,
+                            label: 'Approval\nRuang Meeting',
+                          ),
                         ),
-                      );
-                    },
-                    child: const _ApprovalItem(
-                      icon: Icons.meeting_room,
-                      label: 'Approval\nRuang Meeting',
+                        // ← TAMBAH INI
+                        InkWell(
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ApprovalGymPage(
+                                  role: widget.role,
+                                  userName: widget.userName,
+                                  userId: widget.userId,
+                                  userDivision: widget.userDivision,
+                                  userJabatan: _userJabatan ?? 'Staff',
+                                  operatorType: _userOperatorType,
+                                ),
+                              ),
+                            );
+                          },
+                          child: const _ApprovalItem(
+                            icon: Icons.fitness_center,
+                            label: 'Approval\nRuang Gym',
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
                 ],
               ),
             ),
@@ -520,18 +1183,456 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // Widget untuk booking card
-  Widget _buildBookingCard(Map<String, dynamic> booking) {
-    final vehicle = booking['vehicle'] as Map<String, dynamic>? ?? {};
-    final platNomor = vehicle['platNomor'] ?? 'Tanpa Plat';
-    final tujuan = booking['tujuan'] ?? 'Tidak diketahui';
-    final status = booking['status'] ?? 'UNKNOWN';
-    final waktuPinjam = booking['waktuPinjam'] as Timestamp?;
-    final waktuKembali = booking['waktuKembali'] as Timestamp?;
-    final peminjamNama = booking['namaPeminjam'] ?? '';
-    final peminjamDivisi = booking['divisi'] ?? '';
-      
-    return Container(
+    Future<Map<String, int>> _getRoomStats() async {
+    try {
+      // Total ruang aktif
+      final roomsSnapshot = await FirebaseFirestore.instance
+          .collection('rooms')
+          .where('status', isEqualTo: 'available')
+          .get();
+      final totalRooms = roomsSnapshot.docs.length;
+
+      // Ruang yang sedang dipakai = booking aktif sekarang
+      final now = Timestamp.now();
+      final activeBookings = await FirebaseFirestore.instance
+          .collection('room_bookings')
+          .where('status', isEqualTo: 'APPROVAL_3')
+          .where('waktuMulai', isLessThanOrEqualTo: now)
+          .where('waktuSelesai', isGreaterThan: now)
+          .get();
+
+      final busyRoomIds = activeBookings.docs
+          .map((doc) => doc.data()['ruang']?['roomId'] as String?)
+          .where((id) => id != null)
+          .toSet();
+
+      final availableRooms = (totalRooms - busyRoomIds.length).clamp(0, totalRooms);
+
+      return {
+        'totalRooms': totalRooms,
+        'availableRooms': availableRooms,
+      };
+    } catch (e) {
+      print('Error fetching room stats: $e');
+      return {'totalRooms': 0, 'availableRooms': 0};
+    }
+  }
+
+void _showLaporanPopup() {
+  // Cek apakah user berhak melihat laporan gym
+  final bool canAccessGymReport = widget.role == 'admin' ||
+      (widget.role == 'operator' &&
+          (_userOperatorType == null || _userOperatorType == 'ruang_meeting'));
+
+  // Daftar item yang akan ditampilkan
+  final List<_ReportItem> items = [];
+
+  // Laporan Kendaraan
+  if (widget.role == 'admin' ||
+      (widget.role == 'operator' &&
+          (_userOperatorType == null || _userOperatorType == 'kendaraan'))) {
+    items.add(_ReportItem(
+      title: 'Kendaraan',
+      icon: Icons.directions_car,
+      color: Colors.blue,
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => LaporanPeminjamanKendaraanPage(
+              role: widget.role,
+              userName: widget.userName,
+              userId: widget.userId,
+              userDivision: widget.userDivision,
+            ),
+          ),
+        );
+      },
+    ));
+  }
+
+  // Laporan Ruang Meeting
+  if (widget.role == 'admin' ||
+      (widget.role == 'operator' &&
+          (_userOperatorType == null || _userOperatorType == 'ruang_meeting'))) {
+    items.add(_ReportItem(
+      title: 'Ruang Meeting',
+      icon: Icons.meeting_room,
+      color: Colors.teal,
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => LaporanPeminjamanRuangMeetingPage(
+              role: widget.role,
+              userName: widget.userName,
+              userId: widget.userId,
+              userDivision: widget.userDivision,
+            ),
+          ),
+        );
+      },
+    ));
+  }
+
+  // Laporan Gym
+  if (canAccessGymReport) {
+    items.add(_ReportItem(
+      title: 'Ruang Gym',
+      icon: Icons.fitness_center,
+      color: Colors.orange,
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => LaporanPeminjamanGymPage(
+              role: widget.role,
+              userName: widget.userName,
+              userId: widget.userId,
+              userDivision: widget.userDivision,
+            ),
+          ),
+        );
+      },
+    ));
+  }
+
+  showDialog(
+    context: context,
+    barrierDismissible: true,
+    barrierColor: Colors.black.withOpacity(0.5),
+    builder: (_) {
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header dengan tombol tutup
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 12, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Laporan Kegiatan',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.grey.shade800,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => Navigator.pop(context),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.close,
+                          size: 18,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Garis pemisah tipis
+              Divider(height: 1, color: Colors.grey.shade200, indent: 24, endIndent: 24),
+              const SizedBox(height: 16),
+              // Grid kartu laporan
+              Flexible(
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.95,
+                  ),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: item.onTap,
+                        borderRadius: BorderRadius.circular(16),
+                        splashColor: item.color.withOpacity(0.1),
+                        highlightColor: item.color.withOpacity(0.05),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                item.color.shade50,
+                                item.color.shade100.withOpacity(0.3),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: item.color.shade100,
+                              width: 1.2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: item.color.withOpacity(0.08),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 52,
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: item.color.withOpacity(0.15),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  item.icon,
+                                  size: 28,
+                                  color: item.color.shade600,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Flexible(
+                                child: Text(
+                                  item.title,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: item.color.shade800,
+                                    height: 1.3,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Widget _buildMeetingBookingCard(Map<String, dynamic> booking) {
+  final peminjam = booking['peminjam'] as Map<String, dynamic>? ?? {};
+  final namaKegiatan = booking['namaKegiatan'] ?? '-';
+  final status = booking['status'] ?? 'UNKNOWN';
+  final waktuMulai = booking['waktuMulai'] as Timestamp?;
+  final waktuSelesai = booking['waktuSelesai'] as Timestamp?;
+  final peminjamNama = peminjam['nama'] ?? '-';
+  final peminjamDivisi = peminjam['divisi'] ?? '-';
+
+  final bool isApprovalMode = widget.role != 'user' ||
+      (widget.role == 'user' && _isManagerDivisi);
+
+  return GestureDetector(
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DetailPeminjamanRuangMeetingPage(
+            data: booking,
+            role: widget.role,
+            userName: widget.userName,
+            userId: widget.userId,
+            userDivision: widget.userDivision,
+            isApprovalMode: isApprovalMode,
+          ),
+        ),
+      ).then((_) {
+        setState(() {});
+      });
+    },
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(Icons.meeting_room_outlined,
+                        size: 16, color: Colors.teal.shade600),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        namaKegiatan,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade800,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: DashboardHelpers.getStatusColor(status).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: DashboardHelpers.getStatusColor(status)),
+                ),
+                child: Text(
+                  DashboardHelpers.getStatusLabel(status),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: DashboardHelpers.getStatusColor(status),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.arrow_forward_ios_rounded,
+                  size: 14, color: Colors.grey.shade400),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (widget.role != 'user' || (widget.role == 'user' && _isManagerDivisi)) ...[
+            Row(
+              children: [
+                Icon(Icons.person, size: 14, color: Colors.grey.shade500),
+                const SizedBox(width: 4),
+                Text('Peminjam: $peminjamNama',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.business, size: 14, color: Colors.grey.shade500),
+                const SizedBox(width: 4),
+                Text('Divisi: $peminjamDivisi',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+              ],
+            ),
+            const SizedBox(height: 4),
+          ],
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade500),
+              const SizedBox(width: 6),
+              Text(
+                '${DashboardHelpers.formatDate(waktuMulai)} - ${DashboardHelpers.formatDate(waktuSelesai)}',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _buildBookingCard(Map<String, dynamic> booking) {
+  if (booking['_isGymBooking'] == true) {
+    return _buildGymBookingCard(booking);
+  } else if (booking['_isMeetingBooking'] == true) {
+    return _buildMeetingBookingCard(booking);
+  }
+
+  final vehicle = booking['vehicle'] as Map<String, dynamic>? ?? {};
+  final platNomor = vehicle['platNomor'] ?? 'Tanpa Plat';
+  final tujuan = booking['tujuan'] ?? 'Tidak diketahui';
+  final status = booking['status'] ?? 'UNKNOWN';
+  final waktuPinjam = booking['waktuPinjam'] as Timestamp?;
+  final waktuKembali = booking['waktuKembali'] as Timestamp?;
+  final peminjamNama = booking['namaPeminjam'] ?? '';
+  final peminjamDivisi = booking['divisi'] ?? '';
+
+  final isApprovalMode = widget.role != 'user' ||
+      (widget.role == 'user' && _isManagerDivisi);
+
+  return GestureDetector(
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DetailPeminjamanPage(
+            data: booking,
+            approvalStep: 0,
+            role: widget.role,
+            userName: widget.userName,
+            userId: widget.userId,
+            userDivision: widget.userDivision,
+            isApprovalMode: isApprovalMode,
+            operatorType: _userOperatorType,
+          ),
+        ),
+      ).then((_) {
+        setState(() {});
+      });
+    },
+    child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -578,10 +1679,15 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: Colors.grey.shade400,
+              ),
             ],
           ),
           const SizedBox(height: 8),
-          // Tampilkan info peminjam untuk selain user biasa
           if (widget.role != 'user' || (widget.role == 'user' && _isManagerDivisi)) ...[
             Row(
               children: [
@@ -589,10 +1695,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 const SizedBox(width: 4),
                 Text(
                   'Peminjam: $peminjamNama',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                 ),
               ],
             ),
@@ -603,10 +1706,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 const SizedBox(width: 4),
                 Text(
                   'Divisi: $peminjamDivisi',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                 ),
               ],
             ),
@@ -619,10 +1719,7 @@ class _DashboardPageState extends State<DashboardPage> {
               Expanded(
                 child: Text(
                   'Tujuan: $tujuan',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                 ),
               ),
             ],
@@ -634,23 +1731,19 @@ class _DashboardPageState extends State<DashboardPage> {
               const SizedBox(width: 6),
               Text(
                 '${DashboardHelpers.formatDate(waktuPinjam)} - ${DashboardHelpers.formatDate(waktuKembali)}',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
-                ),
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
               ),
             ],
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-  // Build menu item dengan pengecekan loading
   Widget _buildMenuItem(DashboardMenuItem item) {
-    // Jika menu Approval dan masih loading jabatan untuk user, tampilkan loading
-    if (item.title == 'Approval Peminjaman' && 
-        widget.role == 'user' && 
+    if (item.title == 'Approval Peminjaman' &&
+        widget.role == 'user' &&
         _isLoadingJabatan) {
       return Container(
         decoration: BoxDecoration(
@@ -670,11 +1763,8 @@ class _DashboardPageState extends State<DashboardPage> {
         borderRadius: BorderRadius.circular(12),
         onTap: () async {
           if (item.title == 'Peminjaman Mobil') {
-            // Cek apakah user memiliki peminjaman aktif
             final activeBooking = await _checkActiveBooking();
-            
             if (activeBooking != null) {
-              // Jika ada peminjaman aktif, arahkan ke detail peminjaman
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -686,11 +1776,11 @@ class _DashboardPageState extends State<DashboardPage> {
                     userId: widget.userId,
                     userDivision: widget.userDivision,
                     isApprovalMode: false,
+                    operatorType: _userOperatorType,
                   ),
                 ),
               );
             } else {
-              // Jika tidak ada peminjaman aktif, arahkan ke form booking
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -714,11 +1804,76 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               );
             }
-            } else if (item.title == 'Manajemen User') {
+          } else if (item.title == 'Manajemen User') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ManajemenUserPage(
+                  role: widget.role,
+                  userName: widget.userName,
+                  userId: widget.userId,
+                  userDivision: widget.userDivision,
+                ),
+              ),
+            );
+          } else if (item.title == 'Manajemen Kendaraan') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ManajemenKendaraanPage(
+                  role: widget.role,
+                  userName: widget.userName,
+                  userId: widget.userId,
+                  userDivision: widget.userDivision,
+                ),
+              ),
+            );
+          } else if (item.title == 'Manajemen Ruang Meeting') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ManajemenRuangMeetingPage(
+                  role: widget.role,
+                  userName: widget.userName,
+                  userId: widget.userId,
+                  userDivision: widget.userDivision,
+                ),
+              ),
+            );
+          } else if (item.title == 'Laporan Kegiatan') {
+            _showLaporanPopup();
+          } else if (item.title == 'Peminjaman Ruang Meeting') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => MeetingRoomBookingFormPage(
+                  role: widget.role,
+                  userName: widget.userName,
+                  userId: widget.userId,
+                  userDivision: widget.userDivision,
+                ),
+              ),
+            ).then((_) {
+              setState(() {});
+            });
+          } else if (item.title == 'Dashboard & Monitoring') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => DashboardMonitoringPage(
+                    role: widget.role,
+                    userName: widget.userName,
+                    userId: widget.userId,
+                    userDivision: widget.userDivision,
+                    operatorType: _userOperatorType,
+                  ),
+                ),
+              );
+            } else if (item.title == 'Peminjaman Ruang Gym') {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ManajemenUserPage(
+                    builder: (_) => GymBookingFormPage(
                       role: widget.role,
                       userName: widget.userName,
                       userId: widget.userId,
@@ -726,20 +1881,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   ),
                 );
-            } else if (item.title == 'Manajemen Kendaraan') {  // ✅ TAMBAHKAN INI
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ManajemenKendaraanPage(
-                      role: widget.role,
-                      userName: widget.userName,
-                      userId: widget.userId,
-                      userDivision: widget.userDivision,
-                    ),
-                  ),
-                );
-            }
-          // TODO: Tambahkan navigasi untuk menu lainnya
+              }
         },
         child: Container(
           decoration: BoxDecoration(
@@ -754,7 +1896,6 @@ class _DashboardPageState extends State<DashboardPage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Badge untuk approval count
                 if (item.title == 'Approval Peminjaman' && _hasAccessToApproval())
                   FutureBuilder<int>(
                     future: _getPendingApprovalCount(),
@@ -780,7 +1921,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           ),
                         );
                       }
-                      return const SizedBox(height: 14); // jaga tinggi tetap konsisten
+                      return const SizedBox(height: 14);
                     },
                   )
                 else
@@ -826,7 +1967,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // Widget untuk konten dashboard utama
   Widget _buildDashboardContent() {
     final now = DateTime.now();
     final formattedDate = DateFormat('EEEE, d MMMM y', 'id_ID').format(now);
@@ -840,7 +1980,6 @@ class _DashboardPageState extends State<DashboardPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 24,
@@ -849,13 +1988,11 @@ class _DashboardPageState extends State<DashboardPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Logo
                   Image.asset(
                     'assets/images/logo-pelindo.webp',
                     height: 32,
                     color: Colors.blue.shade800,
                   ),
-                  // Role Badge
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -919,7 +2056,6 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
             ),
 
-            // Welcome Section
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
@@ -947,24 +2083,66 @@ class _DashboardPageState extends State<DashboardPage> {
 
             const SizedBox(height: 24),
 
-            // Banner sederhana
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Container(
-                height: 140,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  image: const DecorationImage(
-                    image: AssetImage('assets/images/banner-dashboard.png'),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
+Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 24),
+  child: SizedBox(
+    height: 140,
+    child: StreamBuilder<List<HomeBanner>>(
+      stream: _bannerService.streamActiveBanners(),
+      builder: (context, snapshot) {
+        // Loading state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildDefaultBanner();
+        }
+
+        // Error state → fallback ke gambar default
+        if (snapshot.hasError) {
+          debugPrint('Banner stream error: ${snapshot.error}');
+          return _buildDefaultBanner();
+        }
+
+        final banners = snapshot.data ?? [];
+
+        // Data kosong → fallback ke gambar default
+        if (banners.isEmpty) {
+          return _buildDefaultBanner();
+        }
+
+        // Hanya 1 banner → tampilkan langsung tanpa carousel
+        if (banners.length == 1) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: _buildBannerImage(banners.first.imageBase64),
+          );
+        }
+
+        // 2–3 banner → tampilkan carousel
+            return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: CarouselSlider(
+            options: CarouselOptions(
+              autoPlay: true,
+              autoPlayInterval: const Duration(seconds: 4),
+              enlargeCenterPage: false,
+              viewportFraction: 1.0,
+              height: 140, // ← pakai height, bukan aspectRatio
             ),
+            items: banners.map((banner) {
+              return SizedBox(
+                width: double.infinity,
+                height: 140,
+                child: _buildBannerImage(banner.imageBase64),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    ),
+  ),
+),
 
             const SizedBox(height: 32),
 
-            // Quick Stats
             FutureBuilder<Map<String, int>>(
               future: _getVehicleStats(),
               builder: (context, snapshot) {
@@ -984,7 +2162,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   );
                 }
-                
+
                 if (snapshot.hasError) {
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1004,56 +2182,60 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   );
                 }
-                
+
                 final stats = snapshot.data ?? {'totalVehicles': 0, 'ongoingBookings': 0};
                 final totalVehicles = stats['totalVehicles'] ?? 0;
                 final ongoingBookings = stats['ongoingBookings'] ?? 0;
                 final availableVehicles = totalVehicles - ongoingBookings;
-                
+
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Row(
                     children: [
-                      // Statistik Ruang Meeting
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.blue.shade100,
-                              width: 1,
+                    Expanded(
+                      child: FutureBuilder<Map<String, int>>(
+                        future: _getRoomStats(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return _buildStatCard(loading: true, isVehicle: false);
+                          }
+                          final roomStats = snapshot.data ?? {'totalRooms': 0, 'availableRooms': 0};
+                          final totalRooms = roomStats['totalRooms'] ?? 0;
+                          final availableRooms = roomStats['availableRooms'] ?? 0;
+
+                          return Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.blue.shade100, width: 1),
                             ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              const SizedBox(height: 4),
-                              const Text(
-                                '3/5',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.blue,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$availableRooms/$totalRooms',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w600,
+                                    color: availableRooms > 0 ? Colors.blue : Colors.red,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Ruang Meeting Tersedia',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.blue,
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'Ruang Meeting Tersedia',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: 12, color: Colors.blue),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
+                    ),
                       const SizedBox(width: 12),
-                      // Statistik Kendaraan
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.all(16),
@@ -1075,14 +2257,14 @@ class _DashboardPageState extends State<DashboardPage> {
                                 style: TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w600,
-                                  color: availableVehicles > 0 
-                                      ? Colors.green 
+                                  color: availableVehicles > 0
+                                      ? Colors.green
                                       : Colors.red,
                                 ),
                               ),
                               const SizedBox(height: 4),
                               const Text(
-                                'Kendaraan Operasional Tersedia',
+                                'Kendaraan Tersedia',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 12,
@@ -1111,7 +2293,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
             const SizedBox(height: 32),
 
-            // Peminjaman Terkini - JUDUL DIPERBAIKI
+            // Peminjaman Terkini
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
@@ -1154,7 +2336,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   );
                 }
-                
+
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 24),
@@ -1163,7 +2345,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   );
                 }
-                
+
                 if (snapshot.hasError) {
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1183,9 +2365,9 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   );
                 }
-                
+
                 final bookings = snapshot.data ?? [];
-                
+
                 if (bookings.isEmpty) {
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1205,7 +2387,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   );
                 }
-                
+
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
@@ -1247,7 +2429,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
             const SizedBox(height: 16),
 
-            // Grid Menu - TUNGGU JIKA MASIH LOADING JABATAN UNTUK MANAGER
+            // Grid Menu
             if (widget.role == 'user' && _isLoadingJabatan)
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 24),
@@ -1282,72 +2464,78 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: IndexedStack(
-          index: _currentIndex,
-          children: [
-            // Tab 0: Dashboard
-            _buildDashboardContent(),
-            
-            // Tab 1: Aktivitas
-            AktivitasPage(
-              role: widget.role,
-              userName: widget.userName,
-              userId: widget.userId,
-              userDivision: widget.userDivision,
-            ),
-            
-            // Tab 2: Profile (dengan data lengkap)
-            _buildProfileTab(),
-          ],
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: Colors.white,
+    body: Stack(
+      children: [
+        SafeArea(
+          child: IndexedStack(
+            index: _currentIndex,
+            children: [
+              _buildDashboardContent(),
+              AktivitasPage(
+                role: widget.role,
+                userName: widget.userName,
+                userId: widget.userId,
+                userDivision: widget.userDivision,
+              ),
+              _buildProfileTab(),
+            ],
+          ),
         ),
-      ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
-    );
-  }
+        AIChatbotWidget(
+          userId: widget.userId,
+          userDivision: widget.userDivision,
+          userName: widget.userName,
+        ),
+      ],
+    ),
+    bottomNavigationBar: _buildBottomNavigationBar(),
+  );
+}
 
   // Helper method untuk judul peminjaman terkini
   String _getRecentBookingsTitle() {
     if (widget.role == 'user') {
-      // Gunakan _isManagerDivisi
       if (_isManagerDivisi) {
         return 'Peminjaman Menunggu Approval Divisi ${widget.userDivision}';
-      } else {
-        return 'Peminjaman Terkini Saya';
       }
-    } else if (widget.role == 'admin') {
+      return 'Peminjaman Terkini Saya';
+    } else if (widget.role == 'admin' || widget.role == 'manager_umum') {
       return 'Peminjaman Menunggu Approval Manager Umum';
     } else if (widget.role == 'operator') {
-      return 'Peminjaman Menunggu Verifikasi Operator';
-    } else if (widget.role == 'manager_umum') {
-      return 'Peminjaman Menunggu Approval Manager Umum';
-    } else {
-      return 'Peminjaman Terkini';
+      if (_userOperatorType == 'ruang_meeting') {
+        return 'Ruang Meeting dan Gym Menunggu Verifikasi';
+      } else if (_userOperatorType == 'kendaraan') {
+        return 'Kendaraan Menunggu Verifikasi';
+      } else {
+        return 'Peminjaman Menunggu Verifikasi Operator';
+      }
     }
+    return 'Peminjaman Terkini';
   }
 
   // Helper method untuk pesan ketika tidak ada peminjaman
   String _getNoBookingsMessage() {
     if (widget.role == 'user') {
-      // Gunakan _isManagerDivisi
       if (_isManagerDivisi) {
-        return 'Tidak ada peminjaman yang menunggu approval dari divisi ${widget.userDivision}';
-      } else {
-        return 'Belum ada peminjaman kendaraan';
+        return 'Tidak ada peminjaman menunggu approval dari divisi ${widget.userDivision}';
       }
-    } else if (widget.role == 'admin') {
+      return 'Belum ada peminjaman';
+    } else if (widget.role == 'admin' || widget.role == 'manager_umum') {
       return 'Tidak ada peminjaman yang menunggu approval manager umum';
     } else if (widget.role == 'operator') {
-      return 'Tidak ada peminjaman yang menunggu verifikasi operator';
-    } else if (widget.role == 'manager_umum') {
-      return 'Tidak ada peminjaman yang menunggu approval manager umum';
-    } else {
-      return 'Tidak ada peminjaman';
+      if (_userOperatorType == 'ruang_meeting') {
+        return 'Tidak ada peminjaman ruang meeting dan gym yang menunggu verifikasi';
+      } else if (_userOperatorType == 'kendaraan') {
+        return 'Tidak ada peminjaman kendaraan yang menunggu verifikasi';
+      } else {
+        return 'Tidak ada peminjaman yang menunggu verifikasi operator';
+      }
     }
+    return 'Tidak ada peminjaman';
   }
 
   // Helper widget untuk stat card loading
@@ -1403,7 +2591,8 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     return ProfilePage(
-      userId: widget.userId,  // ✅ HANYA KIRIM userId
+      userId: widget.userId,
+      role: widget.role
     );
   }
 
@@ -1425,7 +2614,6 @@ class _DashboardPageState extends State<DashboardPage> {
         onTap: (index) {
           setState(() {
             _currentIndex = index;
-            // Refresh data ketika kembali ke dashboard
             if (index == 0) {
               setState(() {});
             }
@@ -1539,11 +2727,16 @@ class DashboardHelpers {
         return Colors.grey;
       case 'CANCELLED':
         return Colors.red;
+      // ── Tambahan untuk gym ──
+      case 'PENDING':
+        return Colors.orange;
+      case 'APPROVED':
+        return Colors.green;
+      // ────────────────────────
       default:
         return Colors.grey;
     }
   }
-
   static String getStatusLabel(String status) {
     switch (status) {
       case 'SUBMITTED':
@@ -1560,6 +2753,12 @@ class DashboardHelpers {
         return 'Selesai';
       case 'CANCELLED':
         return 'Ditolak';
+      // ── Tambahan untuk gym ──
+      case 'PENDING':
+        return 'Menunggu Verifikasi';
+      case 'APPROVED':
+        return 'Disetujui Operator';
+      // ────────────────────────
       default:
         return status;
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'form_user_page.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 class ManajemenUserPage extends StatefulWidget {
   final String role;
@@ -80,53 +81,161 @@ class _ManajemenUserPageState extends State<ManajemenUserPage> {
     );
   }
 
-  Future<void> _deleteUser(String userId, String nipp, String email) async {
-    // Konfirmasi delete
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Konfirmasi Hapus'),
-        content: Text('Yakin ingin menghapus user dengan NIPP: $nipp?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Hapus'),
+Future<void> _deleteUser(String userId, String nipp, String email) async {
+  // Konfirmasi delete
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 28),
+          const SizedBox(width: 12),
+          const Text('Konfirmasi Hapus'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Yakin ingin menghapus user dengan NIPP: $nipp?'),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.red.shade700, size: 16),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Akun login user ini juga akan dihapus permanen',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text('Batal', style: TextStyle(color: Colors.grey.shade600)),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red.shade600,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Ya, Hapus'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirm != true) return;
+
+  FirebaseApp? secondaryApp;
+
+  try {
+    setState(() => _isLoading = true);
+
+    // ✅ STEP 1: Login sebagai user yang akan dihapus via secondary app
+    // Password default = NIPP (sesuai logika _createNewUser di form_user_page.dart)
+    secondaryApp = await Firebase.initializeApp(
+      name: 'deleteUserApp_${DateTime.now().millisecondsSinceEpoch}',
+      options: Firebase.app().options,
     );
 
-    if (confirm != true) return;
+    final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+
+    bool authDeleted = false;
+    String? authWarning;
 
     try {
-      setState(() => _isLoading = true);
+      // Login sebagai user tersebut
+      final userCredential = await secondaryAuth.signInWithEmailAndPassword(
+        email: email,
+        password: nipp, // password default = NIPP
+      );
 
-      // 1. Hapus dari Firestore
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .delete();
+      // ✅ STEP 2: Hapus akun Auth-nya
+      await userCredential.user!.delete();
+      authDeleted = true;
+      print('✅ Firebase Auth user berhasil dihapus: $email');
 
-      // 2. Hapus dari Firebase Auth
-      // CATATAN: Untuk hapus user dari Auth, admin perlu credential khusus
-      // Karena kita tidak bisa hapus user lain langsung dari client
-      // Solusi: Buat Cloud Function atau gunakan Admin SDK
-      // Untuk sekarang, kita hanya hapus dari Firestore
-      
-      _showSnackbar('User berhasil dihapus dari database');
-      await _loadUsers();
-    } catch (e) {
-      print('Error deleting user: $e');
-      _showSnackbar('Error menghapus user: $e', isError: true);
-    } finally {
-      setState(() => _isLoading = false);
+    } on FirebaseAuthException catch (e) {
+      // Jika login gagal (misal password sudah diubah user),
+      // tetap lanjut hapus Firestore tapi beri warning
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        authWarning = 'Data berhasil dihapus, namun akun login tidak bisa dihapus otomatis karena password sudah diubah user. Hapus manual di Firebase Console.';
+      } else if (e.code == 'user-not-found') {
+        // Auth sudah tidak ada, anggap sukses
+        authDeleted = true;
+        print('ℹ️ Auth user tidak ditemukan (mungkin sudah dihapus sebelumnya)');
+      } else {
+        authWarning = 'Data berhasil dihapus, namun akun login gagal dihapus: ${e.message}';
+      }
+      print('⚠️ FirebaseAuth delete warning: ${e.code} - ${e.message}');
     }
+
+    // ✅ STEP 3: Hapus dari Firestore
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .delete();
+
+    print('✅ Firestore user berhasil dihapus: $userId');
+
+    await _loadUsers();
+
+    if (mounted) {
+      if (authWarning != null) {
+        // Tampilkan warning jika Auth tidak bisa dihapus
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
+                const SizedBox(width: 12),
+                const Text('Perhatian'),
+              ],
+            ),
+            content: Text(authWarning!),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.shade700,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Mengerti'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        _showSnackbar('User berhasil dihapus sepenuhnya');
+      }
+    }
+
+  } catch (e) {
+    print('Error deleting user: $e');
+    if (mounted) {
+      _showSnackbar('Error menghapus user: $e', isError: true);
+    }
+  } finally {
+    // ✅ SELALU hapus secondary app
+    await secondaryApp?.delete();
+    if (mounted) setState(() => _isLoading = false);
   }
+}
 
   void _navigateToAddUser() async {
     final result = await Navigator.push(

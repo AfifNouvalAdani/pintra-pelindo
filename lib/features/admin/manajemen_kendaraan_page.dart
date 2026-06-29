@@ -618,8 +618,6 @@ Future<void> _loadKendaraan() async {
                 ],
               ),
 
-
-
               const SizedBox(height: 20),
 
               Row(

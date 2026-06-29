@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import '../setting/manage_banner_page.dart';
 
 class ProfilePage extends StatefulWidget {
   final String userId;
+  final String role;
 
   const ProfilePage({
     super.key,
     required this.userId,
+    required this.role,
   });
 
   @override
@@ -25,24 +28,27 @@ class _ProfilePageState extends State<ProfilePage> {
     _loadUserData();
   }
 
-  Future<void> _loadUserData() async {
-    try {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .get();
+Future<void> _loadUserData() async {
+  try {
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.userId)
+        .get();
 
-      if (userDoc.exists) {
-        setState(() {
-          _userData = userDoc.data();
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      print('Error loading user data: $e');
-      setState(() => _isLoading = false);
+    if (!mounted) return; // ← TAMBAH INI
+
+    if (userDoc.exists) {
+      setState(() {
+        _userData = userDoc.data();
+        _isLoading = false;
+      });
     }
+  } catch (e) {
+    print('Error loading user data: $e');
+    if (!mounted) return; // ← TAMBAH INI
+    setState(() => _isLoading = false);
   }
+}
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
@@ -185,15 +191,83 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
 
               const SizedBox(height: 30),
+              
+if (widget.role == 'admin' || widget.role == 'operator') ...[
+  const SizedBox(height: 12),
+  Container(
+    width: double.infinity,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: Colors.grey.shade200),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.grey.shade100,
+          blurRadius: 8,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    ),
+    child: ListTile(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ManageBannerPage(userId: widget.userId),
+          ),
+        );
+      },
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.blue.shade50,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(
+          Icons.view_carousel_outlined,
+          color: Colors.blue.shade700,
+          size: 20,
+        ),
+      ),
+      title: Text(
+        'Kelola Banner Home',
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: Colors.grey.shade900,
+        ),
+      ),
+      subtitle: Text(
+        'Atur banner yang tampil di halaman utama',
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.grey.shade500,
+        ),
+      ),
+      trailing: Icon(
+        Icons.arrow_forward_ios_rounded,
+        size: 14,
+        color: Colors.grey.shade400,
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+    ),
+  ),
+],
 
-              // Version
-              Text(
-                'Version : 1.1.1.1',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade400,
-                ),
-              ),
+const SizedBox(height: 16),
+
+// Version
+Text(
+  'Version 1.1.1.1',
+  style: TextStyle(
+    fontSize: 12,
+    color: Colors.grey.shade400,
+  ),
+),
 
               const SizedBox(height: 20),
 

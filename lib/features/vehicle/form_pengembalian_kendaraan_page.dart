@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../vehicle/berhasil_pengembalian_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -53,10 +52,8 @@ class _FormPengembalianKendaraanPageState
   final TextEditingController odoController = TextEditingController();
 
   bool _isUploading = false;
-  bool _hasPhoto = false;
-  File? _photoFile;
-  String? _photoBase64;
-
+  List<String> _photoBase64List = [];
+  static const int _maxPhotos = 4;
 
   @override
 void initState() {
@@ -230,7 +227,16 @@ Future<void> _loadKondisiAwal() async {
       return;
     }
 
-    // ✅ MULAI PROSES SIMPAN
+    final int? odometerAwal = _kondisiAwalData?['odometerAwal'] as int?;
+    if (odometerAwal != null && odometerValue < odometerAwal) {
+      _showSnackBar('Odometer akhir ($odometerValue km) tidak boleh kurang dari odometer awal ($odometerAwal km)');
+      return;
+    }
+    if (odometerAwal != null && odometerValue == odometerAwal) {
+      _showSnackBar('Odometer akhir tidak boleh sama dengan odometer awal. Minimal bertambah 1 km');
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
@@ -267,10 +273,11 @@ Future<void> _loadKondisiAwal() async {
         kondisiAkhirData['returnedBy'] = widget.userId;
         kondisiAkhirData['returnedByName'] = widget.userName;
         
-        if (_photoBase64 != null && _photoBase64!.isNotEmpty) {
-          kondisiAkhirData['fotoPengembalianBase64'] = _photoBase64;
-          kondisiAkhirData['fotoPengembalianTimestamp'] = Timestamp.now();
-        }
+          if (_photoBase64List.isNotEmpty) {
+            kondisiAkhirData['fotoPengembalianBase64List'] = _photoBase64List;
+            kondisiAkhirData['fotoPengembalianCount'] = _photoBase64List.length;
+            kondisiAkhirData['fotoPengembalianTimestamp'] = Timestamp.now();
+          }
         } else {
           // Ada perubahan dari kondisi awal
           kondisiAkhirData = {
@@ -295,8 +302,9 @@ Future<void> _loadKondisiAwal() async {
             kondisiAkhirData['uraianKelengkapan'] = uraianKelengkapanController.text;
           }
 
-          if (_photoBase64 != null && _photoBase64!.isNotEmpty) {
-            kondisiAkhirData['fotoPengembalianBase64'] = _photoBase64;
+          if (_photoBase64List.isNotEmpty) {
+            kondisiAkhirData['fotoPengembalianBase64List'] = _photoBase64List;
+            kondisiAkhirData['fotoPengembalianCount'] = _photoBase64List.length;
             kondisiAkhirData['fotoPengembalianTimestamp'] = Timestamp.now();
           }
         }
@@ -314,8 +322,6 @@ Future<void> _loadKondisiAwal() async {
 
       print('✅ Booking updated to DONE');
 
-      // 🔥 REVISI: Update vehicles collection
-      // Gunakan kelengkapan awal jika seperti awal peminjaman, gunakan yang baru jika ada perubahan
       List<String> kelengkapanFinal = kondisi == 'Seperti Awal Peminjaman' && kelengkapan == 'Seperti Awal Peminjaman'
           ? (_kondisiAwalData?['kelengkapanItems'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? []
           : kelengkapanTersedia;
@@ -324,14 +330,14 @@ Future<void> _loadKondisiAwal() async {
           .collection('vehicles')
           .doc(widget.vehicleId)
           .update({
-        'kelengkapan': kelengkapanFinal, // 🔥 Update array kelengkapan
+        'kelengkapan': kelengkapanFinal,
         'odometerTerakhir': odometerValue,
+        'sisaBBMTerakhir': sisaBBM!,
         'updatedAt': Timestamp.now(),
       });
 
       print('✅ Vehicle updated');
 
-      // 5️⃣ TAMBAHKAN LOG DI APPROVAL_HISTORY
       await FirebaseFirestore.instance
           .collection('vehicle_bookings')
           .doc(widget.bookingId)
@@ -340,9 +346,9 @@ Future<void> _loadKondisiAwal() async {
         'action': 'VEHICLE_RETURNED',
         'oldStatus': 'ON_GOING',
         'newStatus': 'DONE',
-        'status': 'DONE', // ✅ TAMBAHKAN INI - Penting untuk timeline
+        'status': 'DONE',
         'actionBy': widget.userName,
-        'actionRole': widget.role, // ✅ Tambahkan role
+        'actionRole': widget.role,
         'userId': widget.userId,
         'timestamp': Timestamp.now(),
         'note': 'Kendaraan telah dikembalikan dan kondisi akhir telah dicatat oleh ${widget.userName}',
@@ -353,7 +359,6 @@ Future<void> _loadKondisiAwal() async {
       setState(() => _isSaving = false);
 
       if (mounted) {
-        // 6️⃣ NAVIGASI KE HALAMAN BERHASIL
         _showSuccessDialog();
       }
     } catch (e) {
@@ -385,7 +390,7 @@ void _showSuccessDialog() {
       context,
       MaterialPageRoute(
         builder: (_) => BerhasilPengembalianPage(
-          bookingId: widget.bookingId, // ✅ Cukup kirim ID saja
+          bookingId: widget.bookingId,
         ),
       ),
     );
@@ -393,64 +398,37 @@ void _showSuccessDialog() {
 }
 
 Future<void> _uploadFoto() async {
+  if (_photoBase64List.length >= _maxPhotos) {
+    _showSnackBar('Maksimal $_maxPhotos foto');
+    return;
+  }
+
   try {
     final ImagePicker picker = ImagePicker();
-    
-    // ✅ Deteksi apakah running di Web atau Mobile
-    final bool isWebPlatform = kIsWeb;
-    
-    ImageSource? source;
-    
-    if (isWebPlatform) {
-      // 🌐 UNTUK WEB: Hanya tampilkan opsi yang tersedia
-      source = await showDialog<ImageSource>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Pilih Sumber Foto'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Di web, kamera hanya muncul jika ada device kamera
-              ListTile(
-                leading: const Icon(Icons.camera_alt),
-                title: const Text('Kamera'),
-                subtitle: const Text('Gunakan webcam atau kamera HP', style: TextStyle(fontSize: 12)),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Galeri'),
-                subtitle: const Text('Pilih dari file', style: TextStyle(fontSize: 12)),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
-              ),
-            ],
-          ),
+
+    ImageSource? source = await showDialog<ImageSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pilih Sumber Foto'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Kamera'),
+              subtitle: kIsWeb ? const Text('Gunakan webcam atau kamera HP', style: TextStyle(fontSize: 12)) : null,
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Galeri'),
+              subtitle: kIsWeb ? const Text('Pilih dari file', style: TextStyle(fontSize: 12)) : null,
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
         ),
-      );
-    } else {
-      // 📱 UNTUK MOBILE (APK): Tampilkan kedua opsi normal
-      source = await showDialog<ImageSource>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Pilih Sumber Foto'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.camera_alt),
-                title: const Text('Kamera'),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Galeri'),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+      ),
+    );
 
     if (source == null) return;
 
@@ -463,61 +441,37 @@ Future<void> _uploadFoto() async {
 
     if (image != null) {
       setState(() => _isUploading = true);
-
       try {
-        // ✅ Gunakan readAsBytes dari XFile langsung
         final bytes = await image.readAsBytes();
-        
-        // Convert ke base64
         final base64String = base64Encode(bytes);
-        
-        // Cek ukuran (jangan lebih dari 800KB untuk safety)
         final sizeInKB = base64String.length * 0.75 / 1024;
-        
+
         if (sizeInKB > 800) {
-          if (mounted) {
-            _showSnackBar('Foto terlalu besar (${sizeInKB.toStringAsFixed(0)}KB). Maksimal 800KB');
-          }
+          _showSnackBar('Foto terlalu besar (${sizeInKB.toStringAsFixed(0)}KB). Maksimal 800KB');
           setState(() => _isUploading = false);
           return;
         }
 
         setState(() {
-          // ✅ Simpan path dari XFile, bukan File
-          _photoFile = null; // Tidak perlu File object
-          _photoBase64 = base64String;
-          _hasPhoto = true;
+          _photoBase64List.add(base64String);
           _isUploading = false;
         });
-        
-        print('✅ Foto berhasil dipilih. Size: ${sizeInKB.toStringAsFixed(2)} KB');
       } catch (e) {
-        print('❌ Error converting image: $e');
         setState(() => _isUploading = false);
-        if (mounted) {
-          _showSnackBar('Gagal memproses foto');
-        }
+        _showSnackBar('Gagal memproses foto');
       }
     }
   } catch (e) {
-    print('❌ Error picking image: $e');
     setState(() => _isUploading = false);
-    if (mounted) {
-      // ✅ Pesan error yang lebih informatif
-      String errorMessage = 'Gagal mengambil foto';
-      if (kIsWeb && e.toString().contains('camera')) {
-        errorMessage = 'Kamera tidak tersedia. Gunakan opsi Galeri atau pastikan browser memiliki izin kamera';
-      }
-      _showSnackBar(errorMessage);
-    }
+    _showSnackBar(kIsWeb && e.toString().contains('camera')
+        ? 'Kamera tidak tersedia. Gunakan opsi Galeri'
+        : 'Gagal mengambil foto');
   }
 }
 
-void _hapusFoto() {
+void _hapusFoto(int index) {
   setState(() {
-    _hasPhoto = false;
-    _photoFile = null;
-    _photoBase64 = null;
+    _photoBase64List.removeAt(index);
   });
 }
 
@@ -583,7 +537,6 @@ void _hapusFoto() {
 
               const SizedBox(height: 32),
 
-              // Kondisi Kendaraan Saat Pengembalian
               Text(
                 'Kondisi Kendaraan Saat Pengembalian',
                 style: TextStyle(
@@ -694,8 +647,6 @@ void _hapusFoto() {
               ],
 
               const SizedBox(height: 24),
-
-              // Upload Foto
               Text(
                 'Foto Kendaraan Saat Pengembalian',
                 style: TextStyle(
@@ -706,137 +657,114 @@ void _hapusFoto() {
               ),
               const SizedBox(height: 8),
               Text(
-                'Unggah foto kondisi kendaraan saat dikembalikan',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
-                ),
+                'Unggah foto kondisi kendaraan saat dikembalikan (maks. $_maxPhotos foto)',
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
               ),
               const SizedBox(height: 12),
-              _hasPhoto
-                  ? Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.green.shade100),
-                      ),
-                      child: Column(
-                        children: [
-                          // ✅ TAMBAHKAN PREVIEW FOTO
-                          if (_photoBase64 != null)
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.memory(
-                                base64Decode(_photoBase64!),
-                                height: 150,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.check_circle_rounded,
-                                color: Colors.green.shade700,
-                                size: 24,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Foto terunggah',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w500,
-                                        color: Colors.green.shade800,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Size: ${(_photoBase64!.length * 0.75 / 1024).toStringAsFixed(2)} KB',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: _hapusFoto,
-                                icon: Icon(
-                                  Icons.delete_outline_rounded,
-                                  color: Colors.grey.shade500,
-                                ),
-                              ),
-                            ],
+
+              if (_photoBase64List.isNotEmpty) ...[
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: 1,
+                  ),
+                  itemCount: _photoBase64List.length,
+                  itemBuilder: (context, index) {
+                    return Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.memory(
+                            base64Decode(_photoBase64List[index]),
+                            width: double.infinity,
+                            height: double.infinity,
+                            fit: BoxFit.cover,
                           ),
-                        ],
-                      ),
-                    )
-                  : Container(
-                      height: 140,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Colors.grey.shade300,
-                          width: 1.5,
-                          style: BorderStyle.solid,
                         ),
-                        borderRadius: BorderRadius.circular(12),
-                        color: Colors.grey.shade50,
-                      ),
-                      child: InkWell(
-                        onTap: _isUploading ? null : _uploadFoto,
-                        borderRadius: BorderRadius.circular(12),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _isUploading
-                                ? SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.blue.shade700,
-                                    ),
-                                  )
-                                : Icon(
-                                    Icons.cloud_upload_rounded,
-                                    size: 40,
-                                    color: Colors.blue.shade700,
-                                  ),
-                            const SizedBox(height: 12),
-                            Text(
-                              _isUploading
-                                  ? 'Mengunggah...'
-                                  : 'Klik untuk upload foto',
-                              style: TextStyle(
-                                color: _isUploading
-                                    ? Colors.grey.shade600
-                                    : Colors.blue.shade700,
-                                fontWeight: FontWeight.w500,
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: GestureDetector(
+                            onTap: () => _hapusFoto(index),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
                               ),
+                              child: const Icon(Icons.close, color: Colors.white, size: 16),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Format: JPG, PNG (max 5MB)',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
+                        Positioned(
+                          bottom: 6,
+                          left: 6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'Foto ${index + 1}',
+                              style: const TextStyle(color: Colors.white, fontSize: 11),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+
+              if (_photoBase64List.length < _maxPhotos)
+                Container(
+                  height: 100,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300, width: 1.5),
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.grey.shade50,
+                  ),
+                  child: InkWell(
+                    onTap: _isUploading ? null : _uploadFoto,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _isUploading
+                            ? SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.blue.shade700,
+                                ),
+                              )
+                            : Icon(Icons.add_photo_alternate_rounded,
+                                size: 32, color: Colors.blue.shade700),
+                        const SizedBox(height: 8),
+                        Text(
+                          _isUploading
+                              ? 'Mengunggah...'
+                              : '+ Tambah Foto (${_photoBase64List.length}/$_maxPhotos)',
+                          style: TextStyle(
+                            color: Colors.blue.shade700,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                ),
 
               const SizedBox(height: 32),
-
-              // Kelengkapan Kendaraan Saat Pengembalian
               Text(
                 'Kelengkapan Kendaraan Saat Pengembalian',
                 style: TextStyle(
@@ -903,8 +831,6 @@ void _hapusFoto() {
 
               if (kelengkapan == 'Tidak Seperti Awal Peminjaman') ...[
                 const SizedBox(height: 24),
-
-                // Checklist Kelengkapan
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -1259,6 +1185,39 @@ void _hapusFoto() {
                   color: Colors.grey.shade600,
                 ),
               ),
+
+              if (_kondisiAwalData?['odometerAwal'] != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.blue.shade100),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.speed_rounded, color: Colors.blue.shade700, size: 18),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Odometer saat awal pinjam: ',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                      Text(
+                        '${_kondisiAwalData!['odometerAwal']} km',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.blue.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               TextFormField(
                 controller: odoController,

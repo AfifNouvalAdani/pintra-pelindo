@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 class FormUserPage extends StatefulWidget {
   final String role;
@@ -34,31 +35,50 @@ class _FormUserPageState extends State<FormUserPage> {
   late TextEditingController _emailController;
   late TextEditingController _noTelpController;
   late TextEditingController _divisiController;
-  late TextEditingController _jabatanController;
 
   String _selectedRole = 'user';
-
-  final List<String> _roleOptions = [
-    'admin',
-    'operator',
-    'user',
-  ];
+  final List<String> _roleOptions = ['admin', 'operator', 'user'];
 
   String _selectedJabatan = 'staff';
-
-  final List<String> _jabatanOptions = [
-    'staff',
-    'manager',
-  ];
+  final List<String> _jabatanOptions = ['staff', 'manager'];
 
   final List<String> _divisiOptions = [
     'SDM',
     'IT',
     'umum',
     'keuangan',
-    'operasi',
-    'pemasaran',
+    'teknik',
+    'komersil',
+    'properti',
+    'perencanaan dan pengendalian',
+    'manajemen, mutu dan resiko',
+    'tanggung jawab sosial dan lingkungan',
+    'HSSE',
   ];
+
+  String? _selectedOperatorType; // null = umum (semua), 'kendaraan', 'ruang_meeting'
+
+  final List<Map<String, dynamic>> _operatorTypeOptions = [
+    {
+      'value': null,
+      'label': 'Semua (Umum)',
+      'subtitle': 'Akses kendaraan & ruang meeting',
+      'icon': Icons.admin_panel_settings_outlined,
+    },
+    {
+      'value': 'kendaraan',
+      'label': 'Kendaraan',
+      'subtitle': 'Hanya approval kendaraan',
+      'icon': Icons.directions_car_outlined,
+    },
+    {
+      'value': 'ruang_meeting',
+      'label': 'Ruang Meeting',
+      'subtitle': 'Hanya approval ruang meeting',
+      'icon': Icons.meeting_room_outlined,
+    },
+  ];
+  // ===========================================
 
   @override
   void initState() {
@@ -78,10 +98,16 @@ class _FormUserPageState extends State<FormUserPage> {
     _divisiController = TextEditingController(
       text: widget.userData?['divisi'] ?? '',
     );
-    
-    // ✅ Load jabatan dari userData atau default 'staff'
+
     _selectedJabatan = widget.userData?['jabatan'] ?? 'staff';
     _selectedRole = widget.userData?['role'] ?? 'user';
+
+    // ===== TAMBAHAN: Load spesialisasi jika ada (perbaikan error) =====
+    if (widget.isEdit) {
+      _selectedOperatorType = widget.userData?['operatorType'] as String?;
+    } else {
+      _selectedOperatorType = null; // default null (umum) untuk user baru
+    }
   }
 
   @override
@@ -104,47 +130,51 @@ class _FormUserPageState extends State<FormUserPage> {
     );
   }
 
-    Future<void> _saveUser() async {
-      if (!_formKey.currentState!.validate()) return;
+  Future<void> _saveUser() async {
+    if (!_formKey.currentState!.validate()) return;
 
-      setState(() => _isLoading = true);
+    setState(() => _isLoading = true);
 
-      try {
-        final nama = _namaController.text.trim();
-        final nipp = _nippController.text.trim();
-        final email = _emailController.text.trim();
-        final noTelp = _noTelpController.text.trim();
-        final divisi = _divisiController.text.trim();
-        final jabatan = _selectedJabatan; // ✅ Ambil dari dropdown
+    try {
+      final nama = _namaController.text.trim();
+      final nipp = _nippController.text.trim();
+      final email = _emailController.text.trim();
+      final noTelp = _noTelpController.text.trim();
+      final divisi = _divisiController.text.trim();
+      final jabatan = _selectedJabatan;
 
-        if (widget.isEdit) {
-          // MODE EDIT
-          await _updateUser(
-            nama: nama,
-            nipp: nipp,
-            email: email,
-            noTelp: noTelp,
-            divisi: divisi,
-            jabatan: jabatan,
-          );
-        } else {
-          // MODE TAMBAH BARU
-          await _createNewUser(
-            nama: nama,
-            nipp: nipp,
-            email: email,
-            noTelp: noTelp,
-            divisi: divisi,
-            jabatan: jabatan,
-          );
-        }
-      } catch (e) {
-        print('Error saving user: $e');
-        _showSnackbar('Error: $e', isError: true);
-      } finally {
-        setState(() => _isLoading = false);
+      // ===== TAMBAHAN: Ambil nilai spesialisasi, hanya relevan jika role operator =====
+      final String? operatorType =
+          _selectedRole == 'operator' ? _selectedOperatorType : null;
+
+      if (widget.isEdit) {
+        await _updateUser(
+          nama: nama,
+          nipp: nipp,
+          email: email,
+          noTelp: noTelp,
+          divisi: divisi,
+          jabatan: jabatan,
+          operatorType: operatorType,
+        );
+      } else {
+        await _createNewUser(
+          nama: nama,
+          nipp: nipp,
+          email: email,
+          noTelp: noTelp,
+          divisi: divisi,
+          jabatan: jabatan,
+          operatorType: operatorType,
+        );
       }
+    } catch (e) {
+      print('Error saving user: $e');
+      _showSnackbar('Error: $e', isError: true);
+    } finally {
+      setState(() => _isLoading = false);
     }
+  }
 
   Future<void> _createNewUser({
     required String nama,
@@ -153,59 +183,53 @@ class _FormUserPageState extends State<FormUserPage> {
     required String noTelp,
     required String divisi,
     required String jabatan,
+    String? operatorType,
   }) async {
+    FirebaseApp? secondaryApp;
+
     try {
-      // 1. Cek apakah NIPP sudah digunakan
       final nippCheck = await FirebaseFirestore.instance
           .collection('users')
           .where('nipp', isEqualTo: nipp)
           .get();
+      if (nippCheck.docs.isNotEmpty) throw 'NIPP sudah terdaftar';
 
-      if (nippCheck.docs.isNotEmpty) {
-        throw 'NIPP sudah terdaftar';
-      }
-
-      // 2. Cek apakah email sudah digunakan
       final emailCheck = await FirebaseFirestore.instance
           .collection('users')
           .where('email', isEqualTo: email)
           .get();
+      if (emailCheck.docs.isNotEmpty) throw 'Email sudah terdaftar';
 
-      if (emailCheck.docs.isNotEmpty) {
-        throw 'Email sudah terdaftar';
-      }
+      secondaryApp = await Firebase.initializeApp(
+        name: 'secondaryApp',
+        options: Firebase.app().options,
+      );
 
-      // 3. Daftarkan ke Firebase Auth
-      // Password = NIPP (sesuai dengan logic login)
-      final userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
+      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+      final userCredential = await secondaryAuth.createUserWithEmailAndPassword(
         email: email,
-        password: nipp, // Password sama dengan NIPP
+        password: nipp,
       );
 
       final uid = userCredential.user!.uid;
 
-      // 4. Simpan data user ke Firestore dengan UID sebagai document ID
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .set({
+      await secondaryAuth.signOut();
+
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'nama': nama,
         'nipp': nipp,
         'email': email,
-        'noTelp': int.tryParse(noTelp) ?? noTelp,
+        'noTelp': noTelp,
         'divisi': divisi,
         'jabatan': jabatan,
         'role': _selectedRole,
+        if (operatorType != null) 'operatorType': operatorType,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
       _showSnackbar('User berhasil ditambahkan!');
-      
-      // Kembali ke halaman sebelumnya dengan result true
       Navigator.pop(context, true);
-      
     } on FirebaseAuthException catch (e) {
       String errorMessage;
       switch (e.code) {
@@ -222,6 +246,8 @@ class _FormUserPageState extends State<FormUserPage> {
           errorMessage = 'Error Firebase Auth: ${e.message}';
       }
       throw errorMessage;
+    } finally {
+      await secondaryApp?.delete();
     }
   }
 
@@ -232,103 +258,83 @@ class _FormUserPageState extends State<FormUserPage> {
     required String noTelp,
     required String divisi,
     required String jabatan,
+    String? operatorType,
   }) async {
     try {
       final userId = widget.userData!['id'];
       final oldNipp = widget.userData!['nipp'];
       final oldEmail = widget.userData!['email'];
 
-      // 1. Jika NIPP berubah, cek apakah NIPP baru sudah digunakan
       if (nipp != oldNipp) {
         final nippCheck = await FirebaseFirestore.instance
             .collection('users')
             .where('nipp', isEqualTo: nipp)
             .get();
-
-        if (nippCheck.docs.isNotEmpty) {
-          throw 'NIPP sudah terdaftar';
-        }
+        if (nippCheck.docs.isNotEmpty) throw 'NIPP sudah terdaftar';
       }
 
-      // 2. Jika email berubah, cek apakah email baru sudah digunakan
       if (email != oldEmail) {
         final emailCheck = await FirebaseFirestore.instance
             .collection('users')
             .where('email', isEqualTo: email)
             .get();
-
-        if (emailCheck.docs.isNotEmpty) {
-          throw 'Email sudah terdaftar';
-        }
+        if (emailCheck.docs.isNotEmpty) throw 'Email sudah terdaftar';
       }
 
-      // 3. Update data di Firestore
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .update({
-        'nama': nama,
-        'nipp': nipp,
-        'email': email,
-        'noTelp': int.tryParse(noTelp) ?? noTelp,
-        'divisi': divisi,
-        'jabatan': jabatan,
-        'role': _selectedRole,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+        final Map<String, dynamic> updateData = {
+          'nama': nama,
+          'nipp': nipp,
+          'email': email,
+          'noTelp': noTelp,
+          'divisi': divisi,
+          'jabatan': jabatan,
+          'role': _selectedRole,
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+        if (operatorType != null) {
+          updateData['operatorType'] = operatorType;
+        } else {
+          updateData['operatorType'] = FieldValue.delete();
+        }
+        await FirebaseFirestore.instance
+    .collection('users')
+    .doc(userId)
+    .update(updateData);
 
-      // 4. Update email di Firebase Auth (jika berubah)
       if (email != oldEmail) {
         print('Email changed, but Auth email not updated (requires admin SDK)');
       }
 
       _showSnackbar('User berhasil diupdate!');
-      
-      // Kembali ke halaman sebelumnya dengan result true
       Navigator.pop(context, true);
-      
     } catch (e) {
       throw e;
     }
   }
 
   String? _validateEmail(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Email wajib diisi';
-    }
+    if (value == null || value.isEmpty) return 'Email wajib diisi';
     final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-    if (!emailRegex.hasMatch(value)) {
-      return 'Format email tidak valid';
-    }
+    if (!emailRegex.hasMatch(value)) return 'Format email tidak valid';
     return null;
   }
 
   String? _validateNIPP(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'NIPP wajib diisi';
-    }
+    if (value == null || value.isEmpty) return 'NIPP wajib diisi';
     final nippRegex = RegExp(r'^[0-9]+$');
-    if (!nippRegex.hasMatch(value)) {
-      return 'NIPP hanya boleh berisi angka';
-    }
+    if (!nippRegex.hasMatch(value)) return 'NIPP hanya boleh berisi angka';
     return null;
   }
 
   String? _validateRequired(String? value, String fieldName) {
-    if (value == null || value.isEmpty) {
-      return '$fieldName wajib diisi';
-    }
+    if (value == null || value.isEmpty) return '$fieldName wajib diisi';
     return null;
   }
 
   String? _validatePhone(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'No. Telepon wajib diisi';
-    }
+    if (value == null || value.isEmpty) return 'No. Telepon wajib diisi';
     final phoneRegex = RegExp(r'^[0-9]+$');
-    if (!phoneRegex.hasMatch(value)) {
-      return 'No. Telepon hanya boleh berisi angka';
-    }
+    if (!phoneRegex.hasMatch(value)) return 'No. Telepon hanya boleh berisi angka';
     return null;
   }
 
@@ -397,7 +403,7 @@ class _FormUserPageState extends State<FormUserPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      widget.isEdit 
+                      widget.isEdit
                           ? 'Perbarui data pengguna yang sudah ada'
                           : 'Tambahkan pengguna baru ke dalam sistem',
                       style: TextStyle(
@@ -417,6 +423,7 @@ class _FormUserPageState extends State<FormUserPage> {
                 child: Form(
                   key: _formKey,
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Informasi password
                       if (!widget.isEdit)
@@ -455,365 +462,323 @@ class _FormUserPageState extends State<FormUserPage> {
                         ),
 
                       // Nama Lengkap
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Nama Lengkap',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey.shade800,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _namaController,
-                            decoration: InputDecoration(
-                              hintText: 'Masukkan nama lengkap',
-                              filled: true,
-                              fillColor: Colors.grey.shade50,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                              prefixIcon: Icon(
-                                Icons.person_outlined,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                            validator: (v) => _validateRequired(v, 'Nama'),
-                          ),
-                        ],
+                      _buildLabel('Nama Lengkap'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _namaController,
+                        decoration: _inputDecoration(
+                          hint: 'Masukkan nama lengkap',
+                          icon: Icons.person_outlined,
+                        ),
+                        validator: (v) => _validateRequired(v, 'Nama'),
                       ),
-
                       const SizedBox(height: 16),
 
                       // NIPP
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'NIPP',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey.shade800,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _nippController,
-                            decoration: InputDecoration(
-                              hintText: 'Masukkan NIPP',
-                              filled: true,
-                              fillColor: widget.isEdit 
-                                  ? Colors.grey.shade100 
-                                  : Colors.grey.shade50,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                              prefixIcon: Icon(
-                                Icons.badge_outlined,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: _validateNIPP,
-                            readOnly: widget.isEdit,
-                          ),
-                        ],
+                      _buildLabel('NIPP'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _nippController,
+                        decoration: _inputDecoration(
+                          hint: 'Masukkan NIPP',
+                          icon: Icons.badge_outlined,
+                          fillColor: widget.isEdit ? Colors.grey.shade100 : null,
+                        ),
+                        keyboardType: TextInputType.number,
+                        validator: _validateNIPP,
+                        readOnly: widget.isEdit,
                       ),
-
                       const SizedBox(height: 16),
 
                       // Email
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Email',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey.shade800,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _emailController,
-                            decoration: InputDecoration(
-                              hintText: 'Masukkan email',
-                              filled: true,
-                              fillColor: Colors.grey.shade50,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                              prefixIcon: Icon(
-                                Icons.email_outlined,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                            keyboardType: TextInputType.emailAddress,
-                            validator: _validateEmail,
-                          ),
-                        ],
+                      _buildLabel('Email'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: _inputDecoration(
+                          hint: 'Masukkan email',
+                          icon: Icons.email_outlined,
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        validator: _validateEmail,
                       ),
-
                       const SizedBox(height: 16),
 
                       // No. Telepon
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'No. Telepon',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey.shade800,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _noTelpController,
-                            decoration: InputDecoration(
-                              hintText: 'Masukkan nomor telepon',
-                              filled: true,
-                              fillColor: Colors.grey.shade50,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                              prefixIcon: Icon(
-                                Icons.phone_outlined,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                            keyboardType: TextInputType.phone,
-                            validator: _validatePhone,
-                          ),
-                        ],
+                      _buildLabel('No. Telepon'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _noTelpController,
+                        decoration: _inputDecoration(
+                          hint: 'Masukkan nomor telepon',
+                          icon: Icons.phone_outlined,
+                        ),
+                        keyboardType: TextInputType.phone,
+                        validator: _validatePhone,
                       ),
-
                       const SizedBox(height: 16),
 
                       // Divisi
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Divisi',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey.shade800,
-                            ),
+                      _buildLabel('Divisi'),
+                      const SizedBox(height: 6),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: DropdownButtonFormField<String>(
+                          value: _divisiOptions.contains(_divisiController.text)
+                              ? _divisiController.text
+                              : null,
+                          decoration: _inputDecoration(
+                            hint: 'Pilih divisi',
+                            icon: Icons.business_outlined,
+                            withBackground: false,
                           ),
-                          const SizedBox(height: 6),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: DropdownButtonFormField<String>(
-                              value: _divisiOptions.contains(_divisiController.text)
-                                  ? _divisiController.text
-                                  : null,
-                              decoration: InputDecoration(
-                                hintText: 'Pilih divisi',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide.none,
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 14,
-                                ),
-                                prefixIcon: Icon(
-                                  Icons.business_outlined,
-                                  color: Colors.grey.shade600,
-                                ),
-                                filled: true,
-                                fillColor: Colors.transparent,
-                              ),
-                              items: _divisiOptions.map((divisi) {
-                                return DropdownMenuItem(
-                                  value: divisi,
-                                  child: Text(divisi),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                if (value != null) {
-                                  setState(() {
-                                    _divisiController.text = value;
-                                  });
-                                }
-                              },
-                              validator: (v) => _validateRequired(v, 'Divisi'),
-                              dropdownColor: Colors.white,
-                            ),
-                          ),
-                        ],
+                          items: _divisiOptions.map((divisi) {
+                            return DropdownMenuItem(
+                              value: divisi,
+                              child: Text(divisi),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _divisiController.text = value;
+                              });
+                            }
+                          },
+                          validator: (v) => _validateRequired(v, 'Divisi'),
+                          dropdownColor: Colors.white,
+                        ),
                       ),
-
                       const SizedBox(height: 16),
 
                       // Jabatan
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Jabatan',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey.shade800,
-                            ),
+                      _buildLabel('Jabatan'),
+                      const SizedBox(height: 6),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedJabatan,
+                          decoration: _inputDecoration(
+                            hint: 'Pilih jabatan',
+                            icon: Icons.work_outline,
+                            withBackground: false,
                           ),
-                          const SizedBox(height: 6),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: DropdownButtonFormField<String>(
-                              value: _selectedJabatan,
-                              decoration: InputDecoration(
-                                hintText: 'Pilih jabatan',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide.none,
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 14,
-                                ),
-                                prefixIcon: Icon(
-                                  Icons.work_outline,
-                                  color: Colors.grey.shade600,
-                                ),
-                                filled: true,
-                                fillColor: Colors.transparent,
-                              ),
-                              items: _jabatanOptions.map((jabatan) {
-                                String label;
-                                switch (jabatan) {
-                                  case 'staff':
-                                    label = 'Staff';
-                                    break;
-                                  case 'manager':
-                                    label = 'Manager';
-                                    break;
-                                  default:
-                                    label = jabatan;
-                                }
-                                return DropdownMenuItem(
-                                  value: jabatan,
-                                  child: Text(label),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                  _selectedJabatan = value!;
-                                });
-                              },
-                              dropdownColor: Colors.white,
-                            ),
-                          ),
-                        ],
+                          items: _jabatanOptions.map((jabatan) {
+                            String label;
+                            switch (jabatan) {
+                              case 'staff':
+                                label = 'Staff';
+                                break;
+                              case 'manager':
+                                label = 'Manager';
+                                break;
+                              default:
+                                label = jabatan;
+                            }
+                            return DropdownMenuItem(
+                              value: jabatan,
+                              child: Text(label),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedJabatan = value!;
+                            });
+                          },
+                          dropdownColor: Colors.white,
+                        ),
                       ),
-
                       const SizedBox(height: 16),
 
                       // Role
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Role',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey.shade800,
-                            ),
+                      _buildLabel('Role'),
+                      const SizedBox(height: 6),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedRole,
+                          decoration: _inputDecoration(
+                            hint: 'Pilih role',
+                            icon: Icons.shield_outlined,
+                            withBackground: false,
                           ),
-                          const SizedBox(height: 6),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade50,
-                              borderRadius: BorderRadius.circular(12),
+                          items: _roleOptions.map((role) {
+                            String label;
+                            switch (role) {
+                              case 'admin':
+                                label = 'Admin';
+                                break;
+                              case 'operator':
+                                label = 'Operator';
+                                break;
+                              case 'user':
+                                label = 'User';
+                                break;
+                              default:
+                                label = role;
+                            }
+                            return DropdownMenuItem(
+                              value: role,
+                              child: Text(label),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedRole = value!;
+                              // ===== TAMBAHAN: Reset spesialisasi jika bukan operator =====
+                              if (value != 'operator') {
+                                _selectedOperatorType = null;
+                              }
+                            });
+                          },
+                          dropdownColor: Colors.white,
+                        ),
+                      ),
+
+                      // ===== TAMBAHAN: Widget Spesialisasi Operator =====
+                      if (_selectedRole == 'operator') ...[
+                        const SizedBox(height: 20),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'Spesialisasi Operator',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey.shade800,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: Colors.blue.shade200),
+                                  ),
+                                  child: Text(
+                                    'Opsional',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue.shade700,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            child: DropdownButtonFormField<String>(
-                              value: _selectedRole,
-                              decoration: InputDecoration(
-                                hintText: 'Pilih role',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide.none,
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 14,
-                                ),
-                                prefixIcon: Icon(
-                                  Icons.shield_outlined,
-                                  color: Colors.grey.shade600,
-                                ),
-                                filled: true,
-                                fillColor: Colors.transparent,
+                            const SizedBox(height: 6),
+                            Text(
+                              'Kosongkan untuk operator umum yang bisa akses semua.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade500,
                               ),
-                              items: _roleOptions.map((role) {
-                                String label;
-                                switch (role) {
-                                  case 'admin':
-                                    label = 'Admin';
-                                    break;
-                                  case 'operator':
-                                    label = 'Operator';
-                                    break;
-                                  case 'manager_umum':
-                                    label = 'Manager Umum';
-                                    break;
-                                  case 'user':
-                                    label = 'User';
-                                    break;
-                                  default:
-                                    label = role;
-                                }
-                                return DropdownMenuItem(
-                                  value: role,
-                                  child: Text(label),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // 3 pilihan kartu
+                            Column(
+                              children: _operatorTypeOptions.map((opt) {
+                                final optValue = opt['value'] as String?;
+                                final isSelected = _selectedOperatorType == optValue;
+                                final color = isSelected
+                                    ? Colors.blue.shade700
+                                    : Colors.grey.shade500;
+
+                                return GestureDetector(
+                                  onTap: () => setState(() => _selectedOperatorType = optValue),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 180),
+                                    margin: const EdgeInsets.only(bottom: 10),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 14),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? Colors.blue.shade50
+                                          : Colors.grey.shade50,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isSelected
+                                            ? Colors.blue.shade400
+                                            : Colors.grey.shade300,
+                                        width: isSelected ? 2 : 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 40,
+                                          height: 40,
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? Colors.blue.shade100
+                                                : Colors.grey.shade200,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            opt['icon'] as IconData,
+                                            size: 20,
+                                            color: color,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 14),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                opt['label'] as String,
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: isSelected
+                                                      ? FontWeight.w600
+                                                      : FontWeight.w500,
+                                                  color: isSelected
+                                                      ? Colors.blue.shade800
+                                                      : Colors.grey.shade800,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                opt['subtitle'] as String,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey.shade500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        if (isSelected)
+                                          Icon(Icons.check_circle_rounded,
+                                              color: Colors.blue.shade600, size: 20)
+                                        else
+                                          Icon(Icons.radio_button_unchecked,
+                                              color: Colors.grey.shade400, size: 20),
+                                      ],
+                                    ),
+                                  ),
                                 );
                               }).toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                  _selectedRole = value!;
-                                });
-                              },
-                              dropdownColor: Colors.white,
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
+                      ],
 
                       const SizedBox(height: 32),
 
@@ -882,6 +847,44 @@ class _FormUserPageState extends State<FormUserPage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // Helper untuk label form
+  Widget _buildLabel(String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: Colors.grey.shade800,
+      ),
+    );
+  }
+
+  // Helper untuk dekorasi input
+  InputDecoration _inputDecoration({
+    required String hint,
+    required IconData icon,
+    Color? fillColor,
+    bool withBackground = true,
+  }) {
+    return InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: fillColor ?? Colors.grey.shade50,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 14,
+      ),
+      prefixIcon: Icon(
+        icon,
+        color: Colors.grey.shade600,
       ),
     );
   }
