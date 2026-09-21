@@ -1,0 +1,10 @@
+# Targetkan file logika yang mau dirusak (disuntik bug)
+mutators:
+  - lib/utils/booking_logic.dart
+
+# Targetkan file test yang bertugas menangkap bug tersebut
+test_files:
+  - test/booking_logic_metamorphic_test.dart
+
+# Perintah untuk menjalankan test di flutter
+test_command: "flutter test"

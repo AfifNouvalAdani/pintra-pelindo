@@ -5,6 +5,7 @@ import '../vehicle/detail_peminjaman_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/approval_notification_service.dart';
 import 'package:flutter/services.dart';
+import 'package:pintra/utils/booking_logic.dart';
 
 // Custom Time Picker 24 Jam
 class TimePicker24Hour extends StatefulWidget {
@@ -459,8 +460,7 @@ Future<void> _checkExistingBookings() async {
 
         // Cek apakah ada bentrok waktu
         // Bentrok jika: (waktu_baru_mulai < waktu_lama_selesai) DAN (waktu_baru_selesai > waktu_lama_mulai)
-        bool isBentrok = waktuPinjam.isBefore(bookingEnd) && 
-                        waktuKembali.isAfter(bookingStart);
+        bool isBentrok = BookingLogic.isTimeConflict(waktuPinjam, waktuKembali, bookingStart, bookingEnd);
 
         if (isBentrok) {
           unavailableVehicleIds.add(vehicleId);
@@ -681,8 +681,7 @@ Future<void> _submitForm() async {
       final bookingStart = (booking['waktuPinjam'] as Timestamp).toDate();
       final bookingEnd = (booking['waktuKembali'] as Timestamp).toDate();
 
-      bool isBentrok = waktuPinjamTemp.isBefore(bookingEnd) &&
-          waktuKembaliTemp.isAfter(bookingStart);
+      bool isBentrok = BookingLogic.isTimeConflict(waktuPinjamTemp, waktuKembaliTemp, bookingStart, bookingEnd);
 
       if (isBentrok) {
         _showSnackBar('Kendaraan ini sudah dibooking orang lain pada waktu yang sama. Silakan refresh dan pilih kendaraan lain.');
@@ -694,14 +693,10 @@ Future<void> _submitForm() async {
     final waktuPinjam = _combineDateTime(tglPinjam!, jamPinjam!);
     final waktuKembali = _combineDateTime(tglKembali!, jamKembali!);
 
-    if (waktuKembali.isBefore(waktuPinjam)) {
-      _showSnackBar('Waktu kembali harus setelah waktu pinjam');
-      return;
-    }
-
-    if (waktuPinjam.isBefore(DateTime.now())) {
-      _showSnackBar('Waktu pinjam tidak boleh di masa lalu');
-      return;
+    String? timeError = BookingLogic.validateBookingTime(waktuPinjam, waktuKembali, DateTime.now());
+        if (timeError != null) {
+          _showSnackBar(timeError);
+          return;
     }
 
     try {
@@ -715,17 +710,7 @@ Future<void> _submitForm() async {
       final jabatan = (userData?['jabatan'] ?? '').toLowerCase();
       final role = widget.role;
 
-      // Tentukan initial status berdasarkan role peminjam
-      String initialStatus;
-      if (role == 'admin' || role == 'manager_umum') {
-        initialStatus = 'APPROVAL_3'; // Langsung approved
-      } else if (role == 'operator') {
-        initialStatus = 'APPROVAL_2'; // Skip ke Manager Umum
-      } else if (role == 'user' && jabatan.contains('manager')) {
-        initialStatus = 'APPROVAL_1'; // Skip ke Operator
-      } else {
-        initialStatus = 'SUBMITTED'; // Normal flow
-      }
+      String initialStatus = BookingLogic.determineInitialStatus(role, jabatan);
 
       final bookingData = {
         'peminjamId': widget.userId,

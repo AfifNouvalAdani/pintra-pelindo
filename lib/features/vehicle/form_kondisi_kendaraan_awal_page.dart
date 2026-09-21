@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:pintra/utils/booking_logic.dart';
 
 class FormKondisiKendaraanAwalPage extends StatefulWidget {
   final String role;
@@ -90,10 +91,14 @@ Future<void> _loadKelengkapanKendaraan() async {
   }
 }
 
-  double _calculateCompleteness() {
-    final items = [p3k, dongkrak, apar, segitigaBahaya, banSerep];
-    final completed = items.where((item) => item == true).length;
-    return completed / items.length;
+double _calculateCompleteness() {
+    return BookingLogic.calculateCompleteness([
+      p3k, 
+      dongkrak, 
+      apar, 
+      segitigaBahaya, 
+      banSerep
+    ]);
   }
   // Widget untuk checklist item yang konsisten
   Widget _buildChecklistItem(String label, bool value, Function(bool?) onChanged) {
