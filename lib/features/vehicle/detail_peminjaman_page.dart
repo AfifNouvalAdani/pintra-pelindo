@@ -9,6 +9,7 @@ import 'dart:convert';
 import '../services/location_tracking_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/foundation.dart';
+import 'package:pintra/utils/booking_logic.dart';
 
 class DetailPeminjamanPage extends StatefulWidget {
   final Map<String, dynamic> data;
@@ -409,6 +410,27 @@ void _showSnackBar(String message) {
   }
 }
 
+/// Mengubah dokumen Firestore `vehicle_bookings` menjadi [BookingSlot]
+/// agar bisa diproses oleh fungsi murni di [BookingLogic].
+/// Mengembalikan null bila vehicleId kosong.
+BookingSlot? _toBookingSlot(DocumentSnapshot<Map<String, dynamic>> doc) {
+  final data = doc.data();
+  final vehicleId = data?['vehicleId'] as String?;
+  if (data == null || vehicleId == null || vehicleId.isEmpty) return null;
+  DateTime toDate(dynamic raw) => raw is Timestamp
+      ? raw.toDate()
+      : raw is DateTime
+          ? raw
+          : DateTime.fromMillisecondsSinceEpoch(0);
+  return BookingSlot(
+    id: doc.id,
+    vehicleId: vehicleId,
+    status: (data['status'] as String?) ?? '',
+    start: toDate(data['waktuPinjam']),
+    end: toDate(data['waktuKembali']),
+  );
+}
+
 Future<void> _showSelectVehicleDialog() async {
   try {
     final vehiclesSnapshot = await FirebaseFirestore.instance
@@ -435,17 +457,6 @@ Future<void> _showSelectVehicleDialog() async {
         .where('status', isEqualTo: 'ON_GOING')
         .get();
 
-    // ✅ vehicleId yang sedang ON_GOING (kendaraan sudah diambil)
-    Set<String> hardUnavailableVehicleIds = {};
-    for (var doc in onGoingSnapshot.docs) {
-      // Skip booking ini sendiri
-      if (doc.id == widget.data['id']) continue;
-      final vehicleId = doc.data()['vehicleId'] as String?;
-      if (vehicleId != null) {
-        hardUnavailableVehicleIds.add(vehicleId);
-      }
-    }
-
     // ✅ Ambil semua booking non-ON_GOING aktif — untuk deteksi soft booked (swap)
     final activeSnapshot = await FirebaseFirestore.instance
         .collection('vehicle_bookings')
@@ -454,49 +465,33 @@ Future<void> _showSelectVehicleDialog() async {
         ])
         .get();
 
-    // key: vehicleId, value: bookingId yang memakai kendaraan tersebut
-    Map<String, String> softBookedVehicleIds = {};
-    for (var doc in activeSnapshot.docs) {
-      if (doc.id == widget.data['id']) continue;
-      final vehicleId = doc.data()['vehicleId'] as String?;
-      if (vehicleId != null) {
-        softBookedVehicleIds[vehicleId] = doc.id;
-      }
-    }
+    // ✅ Klasifikasi kendaraan (current / free / soft-booked / hard-unavailable)
+    //    sepenuhnya dilakukan oleh BookingLogic.classifyVehicles (fungsi murni).
+    final bookingSlots = [
+      ...onGoingSnapshot.docs,
+      ...activeSnapshot.docs,
+    ].map(_toBookingSlot).whereType<BookingSlot>().toList();
 
-    final currentVehicleId = _bookingData?['vehicleId'];
+    final docsById = {for (final doc in vehiclesSnapshot.docs) doc.id: doc};
 
-    final vehiclesWithStatus = vehiclesSnapshot.docs.map((doc) {
-      final isHardUnavailable = hardUnavailableVehicleIds.contains(doc.id);
-      final isSoftBooked = softBookedVehicleIds.containsKey(doc.id);
-      final isCurrentVehicle = doc.id == currentVehicleId;
+    final classified = BookingLogic.classifyVehicles(
+      vehicleIds: docsById.keys.toList(),
+      bookings: bookingSlots,
+      currentBookingId: widget.data['id'] as String,
+      currentVehicleId: _bookingData?['vehicleId'] as String?,
+    );
 
+    // Hasil classifyVehicles sudah terurut:
+    // kendaraan saat ini → bebas → soft booked → hard unavailable
+    final vehiclesWithStatus = classified.map((c) {
       return {
-        'doc': doc,
-        'isHardUnavailable': isHardUnavailable,
-        'isSoftBooked': isSoftBooked,
-        'isCurrentVehicle': isCurrentVehicle,
-        'otherBookingId': softBookedVehicleIds[doc.id],
+        'doc': docsById[c.vehicleId]!,
+        'isHardUnavailable': c.category == VehicleCategory.hardUnavailable,
+        'isSoftBooked': c.category == VehicleCategory.softBooked,
+        'isCurrentVehicle': c.category == VehicleCategory.current,
+        'otherBookingId': c.otherBookingId,
       };
     }).toList();
-
-    // Urutan: kendaraan saat ini → bebas → soft booked → hard unavailable
-    vehiclesWithStatus.sort((a, b) {
-      final aCurrent = a['isCurrentVehicle'] as bool? ?? false;
-      final bCurrent = b['isCurrentVehicle'] as bool? ?? false;
-      final aHard = a['isHardUnavailable'] as bool? ?? false;
-      final bHard = b['isHardUnavailable'] as bool? ?? false;
-      final aSoft = a['isSoftBooked'] as bool? ?? false;
-      final bSoft = b['isSoftBooked'] as bool? ?? false;
-
-      if (aCurrent) return -1;
-      if (bCurrent) return 1;
-      if (aHard && !bHard) return 1;
-      if (bHard && !aHard) return -1;
-      if (aSoft && !bSoft) return 1;
-      if (bSoft && !aSoft) return -1;
-      return 0;
-    });
 
     final selectedVehicle = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -683,6 +678,9 @@ Future<void> _updateVehicle(Map<String, dynamic> newVehicle) async {
     final newVehicleName = newVehicle['nama'];
     final otherBookingId = newVehicle['otherBookingId'] as String?;
 
+    // Kendaraan akhir untuk booking ini (berubah via swapVehicles bila terjadi penukaran)
+    String thisBookingVehicleId = newVehicleId as String;
+
     // ✅ Cek apakah kendaraan baru sedang dipakai booking lain (perlu swap)
     if (otherBookingId != null && oldVehicleId != null) {
       // Konfirmasi swap ke operator
@@ -738,11 +736,34 @@ Future<void> _updateVehicle(Map<String, dynamic> newVehicle) async {
           .get();
 
       if (otherBookingDoc.exists) {
+        // ✅ Penukaran kendaraan dihitung oleh BookingLogic.swapVehicles (fungsi murni):
+        //    booking ini memegang kendaraan lama, booking lain memegang kendaraan baru.
+        final otherSlot = _toBookingSlot(otherBookingDoc);
+        final thisSlot = BookingSlot(
+          id: widget.data['id'] as String,
+          vehicleId: oldVehicleId as String,
+          status: (_bookingData?['status'] as String?) ?? '',
+          start: otherSlot?.start ?? DateTime.fromMillisecondsSinceEpoch(0),
+          end: otherSlot?.end ?? DateTime.fromMillisecondsSinceEpoch(0),
+        );
+        final swapped = BookingLogic.swapVehicles(
+          thisSlot,
+          BookingSlot(
+            id: otherBookingId,
+            vehicleId: newVehicleId,
+            status: otherSlot?.status ?? '',
+            start: otherSlot?.start ?? DateTime.fromMillisecondsSinceEpoch(0),
+            end: otherSlot?.end ?? DateTime.fromMillisecondsSinceEpoch(0),
+          ),
+        );
+        thisBookingVehicleId = swapped[0].vehicleId;
+        final otherBookingVehicleId = swapped[1].vehicleId;
+
         await FirebaseFirestore.instance
             .collection('vehicle_bookings')
             .doc(otherBookingId)
             .update({
-          'vehicleId': oldVehicleId,
+          'vehicleId': otherBookingVehicleId,
           'vehicle': {
             'nama': oldVehicleName,
             'platNomor': oldVehiclePlatNomor ?? '-',
@@ -777,7 +798,7 @@ Future<void> _updateVehicle(Map<String, dynamic> newVehicle) async {
         .collection('vehicle_bookings')
         .doc(widget.data['id'])
         .update({
-      'vehicleId': newVehicleId,
+      'vehicleId': thisBookingVehicleId,
       'vehicle': {
         'nama': newVehicleName,
         'platNomor': newVehicle['platNomor'],
@@ -842,8 +863,6 @@ Future<void> _approveBooking() async {
     setState(() => _isLoading = true);
 
     String currentStatus = _bookingData?['status'] ?? 'SUBMITTED';
-    String newStatus;
-    String actionText;
 
     String? userJabatan;
     try {
@@ -856,114 +875,109 @@ Future<void> _approveBooking() async {
       print('Error fetching user jabatan: $e');
     }
 
-    final isManagerDivisi = (userJabatan ?? '').toLowerCase().contains('manager');
+    bool adaKonflik = false;
+    String? konflikDengan;
 
-    if (widget.role == 'user' && isManagerDivisi) {
-      if (currentStatus != 'SUBMITTED') {
-        throw Exception('Hanya dapat menyetujui peminjaman dengan status SUBMITTED');
-      }
-      newStatus = 'APPROVAL_1';
-      actionText = 'Disetujui Manager Divisi';
-
-    } else if (widget.role == 'operator') {
-      if (widget.operatorType == 'ruang_meeting') {
-        throw Exception('Operator Ruang Meeting tidak bisa menyetujui peminjaman kendaraan');
-      }
-      if (currentStatus != 'APPROVAL_1') {
-        throw Exception('Hanya dapat menyetujui peminjaman dengan status APPROVAL_1');
-      }
-
-      // ✅ Cek kendaraan sudah dipilih
-      if (_bookingData?['vehicleId'] == null || _bookingData?['vehicleId'] == '') {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Harap pilih kendaraan terlebih dahulu dengan menekan tombol "Edit Kendaraan"'),
-              backgroundColor: Colors.orange.shade600,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+    // ✅ Khusus role operator: cek dulu kendaraan & konflik waktu via Firestore
+    if (widget.role == 'operator') {
+      if (widget.operatorType != 'ruang_meeting') {
+        if (_bookingData?['vehicleId'] == null || _bookingData?['vehicleId'] == '') {
+          setState(() => _isLoading = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Harap pilih kendaraan terlebih dahulu dengan menekan tombol "Edit Kendaraan"'),
+                backgroundColor: Colors.orange.shade600,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return;
         }
-        setState(() => _isLoading = false);
-        return;
-      }
 
-      final vehicleId = _bookingData!['vehicleId'] as String;
+        final vehicleId = _bookingData!['vehicleId'] as String;
 
-      // ✅ Safe null check untuk waktu
-      final dynamic rawWaktuPinjam = _bookingData!['waktuPinjam'];
-      final dynamic rawWaktuKembali = _bookingData!['waktuKembali'];
+        final dynamic rawWaktuPinjam = _bookingData!['waktuPinjam'];
+        final dynamic rawWaktuKembali = _bookingData!['waktuKembali'];
 
-      if (rawWaktuPinjam == null || rawWaktuKembali == null) {
-        setState(() => _isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Data waktu peminjaman tidak valid, hubungi admin'),
-              backgroundColor: Colors.red.shade600,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+        if (rawWaktuPinjam == null || rawWaktuKembali == null) {
+          setState(() => _isLoading = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Data waktu peminjaman tidak valid, hubungi admin'),
+                backgroundColor: Colors.red.shade600,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return;
         }
-        return;
-      }
 
-      // ✅ Safe casting — handle Timestamp maupun DateTime
-      final DateTime waktuPinjam = rawWaktuPinjam is Timestamp
-          ? rawWaktuPinjam.toDate()
-          : rawWaktuPinjam as DateTime;
-      final DateTime waktuKembali = rawWaktuKembali is Timestamp
-          ? rawWaktuKembali.toDate()
-          : rawWaktuKembali as DateTime;
+        final DateTime waktuPinjam = rawWaktuPinjam is Timestamp
+            ? rawWaktuPinjam.toDate()
+            : rawWaktuPinjam as DateTime;
+        final DateTime waktuKembali = rawWaktuKembali is Timestamp
+            ? rawWaktuKembali.toDate()
+            : rawWaktuKembali as DateTime;
 
-      print('🔍 Cek konflik untuk vehicleId: $vehicleId');
-      print('🕐 Waktu pinjam: $waktuPinjam — Waktu kembali: $waktuKembali');
+        print('🔍 Cek konflik untuk vehicleId: $vehicleId');
+        print('🕐 Waktu pinjam: $waktuPinjam — Waktu kembali: $waktuKembali');
 
-      // ✅ Query booking lain yang pakai kendaraan sama dan sudah di-approve operator (APPROVAL_2 ke atas)
-      final conflictSnapshot = await FirebaseFirestore.instance
-          .collection('vehicle_bookings')
-          .where('vehicleId', isEqualTo: vehicleId)
-          .where('status', whereIn: ['APPROVAL_2', 'APPROVAL_3', 'ON_GOING'])
-          .get();
+        final conflictSnapshot = await FirebaseFirestore.instance
+            .collection('vehicle_bookings')
+            .where('vehicleId', isEqualTo: vehicleId)
+            .where('status', whereIn: ['APPROVAL_2', 'APPROVAL_3', 'ON_GOING'])
+            .get();
 
-      print('📋 Jumlah booking konflik potensial: ${conflictSnapshot.docs.length}');
+        print('📋 Jumlah booking konflik potensial: ${conflictSnapshot.docs.length}');
 
-      bool adaKonflik = false;
-      String? konflikDengan;
+        for (var doc in conflictSnapshot.docs) {
+          if (doc.id == widget.data['id']) continue;
 
-      for (var doc in conflictSnapshot.docs) {
-        // Skip booking ini sendiri
-        if (doc.id == widget.data['id']) continue;
+          final data = doc.data();
+          final dynamic otherRawStart = data['waktuPinjam'];
+          final dynamic otherRawEnd = data['waktuKembali'];
 
-        final data = doc.data();
-        final dynamic otherRawStart = data['waktuPinjam'];
-        final dynamic otherRawEnd = data['waktuKembali'];
+          if (otherRawStart == null || otherRawEnd == null) continue;
 
-        if (otherRawStart == null || otherRawEnd == null) continue;
+          final DateTime otherStart = otherRawStart is Timestamp
+              ? otherRawStart.toDate()
+              : otherRawStart as DateTime;
+          final DateTime otherEnd = otherRawEnd is Timestamp
+              ? otherRawEnd.toDate()
+              : otherRawEnd as DateTime;
 
-        final DateTime otherStart = otherRawStart is Timestamp
-            ? otherRawStart.toDate()
-            : otherRawStart as DateTime;
-        final DateTime otherEnd = otherRawEnd is Timestamp
-            ? otherRawEnd.toDate()
-            : otherRawEnd as DateTime;
+          print('   Cek dengan booking ${doc.id}: $otherStart — $otherEnd');
 
-        print('   Cek dengan booking ${doc.id}: $otherStart — $otherEnd');
+          final bool isBentrok = BookingLogic.isTimeConflict(
+              waktuPinjam, waktuKembali, otherStart, otherEnd);
 
-        // ✅ Overlap check: A bentrok B jika A.start < B.end && A.end > B.start
-        final bool isBentrok = waktuPinjam.isBefore(otherEnd) && waktuKembali.isAfter(otherStart);
+          print('   Bentrok? $isBentrok');
 
-        print('   Bentrok? $isBentrok');
-
-        if (isBentrok) {
-          adaKonflik = true;
-          konflikDengan = data['namaPeminjam'] ?? doc.id;
-          break;
+          if (isBentrok) {
+            adaKonflik = true;
+            konflikDengan = data['namaPeminjam'] ?? doc.id;
+            break;
+          }
         }
       }
+    }
 
-      if (adaKonflik) {
-        setState(() => _isLoading = false);
+    // ✅ Keputusan status/izin sepenuhnya dari BookingLogic (fungsi murni)
+    final result = BookingLogic.approveTransition(
+      role: widget.role,
+      jabatan: userJabatan ?? '',
+      currentStatus: currentStatus,
+      operatorType: widget.operatorType,
+      hasConflict: adaKonflik,
+    );
+
+    if (result.error != null) {
+      setState(() => _isLoading = false);
+
+      // Kasus khusus: kendaraan bentrok → tampilkan dialog informatif (bukan cuma snackbar)
+      if (result.error == 'Kendaraan bentrok') {
         if (mounted) {
           showDialog(
             context: context,
@@ -998,19 +1012,17 @@ Future<void> _approveBooking() async {
         return;
       }
 
-      newStatus = 'APPROVAL_2';
-      actionText = 'Diverifikasi Operator';
-
-    } else if (widget.role == 'admin' || widget.role == 'manager_umum') {
-      if (currentStatus != 'APPROVAL_2') {
-        throw Exception('Hanya dapat menyetujui peminjaman dengan status APPROVAL_2');
-      }
-      newStatus = 'APPROVAL_3';
-      actionText = 'Disetujui Manager Umum';
-
-    } else {
-      throw Exception('Role tidak memiliki izin untuk approval');
+      // Error lain → lempar exception, ditangkap di catch bawah (snackbar merah)
+      throw Exception(result.error);
     }
+
+    final newStatus = result.newStatus!;
+    final actionText = switch (newStatus) {
+      'APPROVAL_1' => 'Disetujui Manager Divisi',
+      'APPROVAL_2' => 'Diverifikasi Operator',
+      'APPROVAL_3' => 'Disetujui Manager Umum',
+      _ => 'Disetujui',
+    };
 
     await FirebaseFirestore.instance
         .collection('vehicle_bookings')
@@ -1047,7 +1059,6 @@ Future<void> _approveBooking() async {
         bookingData: _bookingData!,
       );
       print(success ? '✅ Notifikasi WA berhasil dikirim ke Operator' : '❌ Gagal mengirim notifikasi WA ke Operator');
-
     } else if (newStatus == 'APPROVAL_2') {
       print('📨 Mengirim notifikasi WA ke Manager Umum...');
       final success = await ApprovalNotificationService.sendApprovalNotificationToManagerUmum(
@@ -1055,7 +1066,6 @@ Future<void> _approveBooking() async {
         bookingData: _bookingData!,
       );
       print(success ? '✅ Notifikasi WA berhasil dikirim ke Manager Umum' : '❌ Gagal mengirim notifikasi WA ke Manager Umum');
-
     } else if (newStatus == 'APPROVAL_3') {
       print('📨 Mengirim notifikasi WA ke peminjam...');
       final success = await ApprovalNotificationService.sendApprovedNotificationToPeminjam(
@@ -2533,9 +2543,7 @@ String _getTimelineDate(String status) {
                           builder: (context) {
                             // Cek apakah sudah H-1 jam sebelum waktu pinjam
                             final bool formTersedia = waktuPinjam != null &&
-                                DateTime.now().isAfter(
-                                  waktuPinjam.subtract(const Duration(hours: 1)),
-                                );
+                                BookingLogic.isFormAvailable(waktuPinjam, DateTime.now());
 
                             // Hitung sisa waktu jika belum tersedia
                             String pesanWaktu = '';

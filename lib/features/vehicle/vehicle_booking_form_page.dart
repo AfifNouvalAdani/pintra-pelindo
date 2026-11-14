@@ -5,6 +5,7 @@ import '../vehicle/detail_peminjaman_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/approval_notification_service.dart';
 import 'package:flutter/services.dart';
+import 'package:pintra/utils/booking_logic.dart';
 
 // Custom Time Picker 24 Jam
 class TimePicker24Hour extends StatefulWidget {
@@ -446,36 +447,38 @@ Future<void> _checkExistingBookings() async {
           ])
           .get();
 
-      // 3. Filter kendaraan yang BENTROK WAKTU
-      Set<String> unavailableVehicleIds = {};
-      
+      // 3. Ubah booking aktif menjadi BookingSlot
+      final bookingSlots = <BookingSlot>[];
       for (var bookingDoc in activeBookingsSnapshot.docs) {
         final booking = bookingDoc.data();
-        final bookingStart = (booking['waktuPinjam'] as Timestamp).toDate();
-        final bookingEnd = (booking['waktuKembali'] as Timestamp).toDate();
         final vehicleId = booking['vehicleId'] as String?;
-
-        if (vehicleId == null) continue;
-
-        // Cek apakah ada bentrok waktu
-        // Bentrok jika: (waktu_baru_mulai < waktu_lama_selesai) DAN (waktu_baru_selesai > waktu_lama_mulai)
-        bool isBentrok = waktuPinjam.isBefore(bookingEnd) && 
-                        waktuKembali.isAfter(bookingStart);
-
-        if (isBentrok) {
-          unavailableVehicleIds.add(vehicleId);
-          print('⚠️ Kendaraan $vehicleId bentrok waktu!');
-          print('   Booking lama: ${DateFormat('dd/MM HH:mm').format(bookingStart)} - ${DateFormat('dd/MM HH:mm').format(bookingEnd)}');
-          print('   Booking baru: ${DateFormat('dd/MM HH:mm').format(waktuPinjam)} - ${DateFormat('dd/MM HH:mm').format(waktuKembali)}');
-        }
+        final rawStart = booking['waktuPinjam'];
+        final rawEnd = booking['waktuKembali'];
+        if (vehicleId == null || rawStart is! Timestamp || rawEnd is! Timestamp) continue;
+        bookingSlots.add(BookingSlot(
+          id: bookingDoc.id,
+          vehicleId: vehicleId,
+          status: (booking['status'] as String?) ?? '',
+          start: rawStart.toDate(),
+          end: rawEnd.toDate(),
+        ));
       }
 
-      print('🚗 Total kendaraan aktif: ${vehiclesSnapshot.docs.length}');
-      print('🔴 Kendaraan tidak tersedia (bentrok waktu): ${unavailableVehicleIds.length}');
+      // 4. Kendaraan yang bebas bentrok waktu & status pemblokiran
+      //    ditentukan oleh BookingLogic.availableVehicleIds (fungsi murni)
+      final availableIds = BookingLogic.availableVehicleIds(
+        vehiclesSnapshot.docs.map((doc) => doc.id).toList(),
+        bookingSlots,
+        waktuPinjam,
+        waktuKembali,
+      ).toSet();
 
-      // 4. Filter kendaraan yang TIDAK bentrok
+      print('🚗 Total kendaraan aktif: ${vehiclesSnapshot.docs.length}');
+      print('🔴 Kendaraan tidak tersedia (bentrok waktu): ${vehiclesSnapshot.docs.length - availableIds.length}');
+
+      // 5. Filter kendaraan yang TIDAK bentrok
       final availableVehicles = vehiclesSnapshot.docs
-          .where((doc) => !unavailableVehicleIds.contains(doc.id))
+          .where((doc) => availableIds.contains(doc.id))
           .map((doc) {
         final data = doc.data();
         return {
@@ -681,8 +684,7 @@ Future<void> _submitForm() async {
       final bookingStart = (booking['waktuPinjam'] as Timestamp).toDate();
       final bookingEnd = (booking['waktuKembali'] as Timestamp).toDate();
 
-      bool isBentrok = waktuPinjamTemp.isBefore(bookingEnd) &&
-          waktuKembaliTemp.isAfter(bookingStart);
+      bool isBentrok = BookingLogic.isTimeConflict(waktuPinjamTemp, waktuKembaliTemp, bookingStart, bookingEnd);
 
       if (isBentrok) {
         _showSnackBar('Kendaraan ini sudah dibooking orang lain pada waktu yang sama. Silakan refresh dan pilih kendaraan lain.');
@@ -694,14 +696,10 @@ Future<void> _submitForm() async {
     final waktuPinjam = _combineDateTime(tglPinjam!, jamPinjam!);
     final waktuKembali = _combineDateTime(tglKembali!, jamKembali!);
 
-    if (waktuKembali.isBefore(waktuPinjam)) {
-      _showSnackBar('Waktu kembali harus setelah waktu pinjam');
-      return;
-    }
-
-    if (waktuPinjam.isBefore(DateTime.now())) {
-      _showSnackBar('Waktu pinjam tidak boleh di masa lalu');
-      return;
+    String? timeError = BookingLogic.validateBookingTime(waktuPinjam, waktuKembali, DateTime.now());
+        if (timeError != null) {
+          _showSnackBar(timeError);
+          return;
     }
 
     try {
@@ -715,17 +713,7 @@ Future<void> _submitForm() async {
       final jabatan = (userData?['jabatan'] ?? '').toLowerCase();
       final role = widget.role;
 
-      // Tentukan initial status berdasarkan role peminjam
-      String initialStatus;
-      if (role == 'admin' || role == 'manager_umum') {
-        initialStatus = 'APPROVAL_3'; // Langsung approved
-      } else if (role == 'operator') {
-        initialStatus = 'APPROVAL_2'; // Skip ke Manager Umum
-      } else if (role == 'user' && jabatan.contains('manager')) {
-        initialStatus = 'APPROVAL_1'; // Skip ke Operator
-      } else {
-        initialStatus = 'SUBMITTED'; // Normal flow
-      }
+      String initialStatus = BookingLogic.determineInitialStatus(role, jabatan);
 
       final bookingData = {
         'peminjamId': widget.userId,

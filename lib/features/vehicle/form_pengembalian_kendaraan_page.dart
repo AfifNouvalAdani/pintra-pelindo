@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:pintra/utils/booking_logic.dart';
 
 class FormPengembalianKendaraanPage extends StatefulWidget {
   final String role;
@@ -94,11 +95,15 @@ Future<void> _loadKondisiAwal() async {
   }
 }
 
-  // Fungsi untuk menghitung persentase kelengkapan
   double _calculateCompleteness() {
-    final items = [p3k, dongkrak, apar, segitigaBahaya, banSerep];
-    final completed = items.where((item) => item == true).length;
-    return completed / items.length;
+    // Kita lemparkan (delegate) perhitungannya ke file pure logic
+    return BookingLogic.calculateCompleteness([
+      p3k, 
+      dongkrak, 
+      apar, 
+      segitigaBahaya, 
+      banSerep
+    ]);
   }
 
   // Widget untuk checklist item yang konsisten
@@ -228,13 +233,12 @@ Future<void> _loadKondisiAwal() async {
     }
 
     final int? odometerAwal = _kondisiAwalData?['odometerAwal'] as int?;
-    if (odometerAwal != null && odometerValue < odometerAwal) {
-      _showSnackBar('Odometer akhir ($odometerValue km) tidak boleh kurang dari odometer awal ($odometerAwal km)');
-      return;
-    }
-    if (odometerAwal != null && odometerValue == odometerAwal) {
-      _showSnackBar('Odometer akhir tidak boleh sama dengan odometer awal. Minimal bertambah 1 km');
-      return;
+    if (odometerAwal != null) {
+          String? odoError = BookingLogic.validateOdometer(odometerAwal, odometerValue);
+          if (odoError != null) {
+            _showSnackBar(odoError);
+            return;
+          }
     }
 
     setState(() => _isSaving = true);

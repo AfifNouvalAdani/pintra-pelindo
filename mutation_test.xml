@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Konfigurasi Mutation Analysis untuk evaluasi test suite Metamorphic Testing
+  (11 MR) pada 7 fungsi modul peminjaman kendaraan operasional PINTRA.
+
+  Tool    : mutation_test 1.8.0 (pub.dev)
+  Jalankan: dart run mutation_test mutation_test.xml --no-builtin
+
+  Catatan:
+  - Aturan bawaan (builtin) TIDAK dipakai (flag --no-builtin), sehingga mutant
+    hanya berasal dari operator mutasi yang didefinisikan di bawah.
+  - Mutasi dibatasi pada baris 7 fungsi yang diuji (lihat <lines>).
+  - Hanya test suite MT (test/booking_logic_mt_test.dart) yang dijalankan.
+-->
+<mutations version="1.2">
+  <files>
+    <file>lib/utils/booking_logic.dart
+      <!-- 1. isTimeConflict -->
+      <lines begin="35" end="37"/>
+      <!-- 7. calculateCompleteness -->
+      <lines begin="55" end="59"/>
+      <!-- 2. availableVehicleIds (termasuk konstanta blockingStatuses) -->
+      <lines begin="92" end="108"/>
+      <!-- 3. classifyVehicles -->
+      <lines begin="110" end="151"/>
+      <!-- 4. swapVehicles -->
+      <lines begin="152" end="157"/>
+      <!-- 5. approveTransition -->
+      <lines begin="158" end="190"/>
+      <!-- 6. isFormAvailable -->
+      <lines begin="192" end="194"/>
+    </file>
+  </files>
+
+  <commands>
+    <!-- Hanya suite Metamorphic Testing; exit code 0 = semua MR terpenuhi -->
+    <command group="mt" expected="0" timeout="300" working-directory=".">flutter test test/booking_logic_mt_test.dart</command>
+  </commands>
+
+  <rules>
+    <!-- ============================================================ -->
+    <!-- A. OPERATOR LOGIKA                                           -->
+    <!-- ============================================================ -->
+    <literal text="&amp;&amp;" id="logika.and_ke_or">
+      <mutation text="||"/>
+    </literal>
+    <literal text="||" id="logika.or_ke_and">
+      <mutation text="&amp;&amp;"/>
+    </literal>
+    <!-- Negasi seluruh kondisi if (blok { }).
+         [^;{] mencegah pola melompati statement lain sehingga tidak
+         menghasilkan mutant yang gagal compile (stillborn). -->
+    <regex pattern="[\s]if[\s]*\(([^;{]*?)\)[\s]*{" dotAll="true" id="logika.negasi_if">
+      <mutation text=" if (!($1)) {"/>
+    </regex>
+    <!-- Negasi kondisi if satu baris: if (kondisi) continue; -->
+    <regex pattern="[\s]if[\s]*\(([^;{]*?)\)[\s]*continue;" id="logika.negasi_if_continue">
+      <mutation text=" if (!($1)) continue;"/>
+    </regex>
+    <!-- Negasi salah satu operand pada rantai || -->
+    <regex pattern="\(([^|(]*?)\|\|([^()|]*?)\)" id="logika.negasi_operand_or">
+      <mutation text="(!($1)||$2)"/>
+      <mutation text="($1||!($2))"/>
+    </regex>
+    <!-- Penghapusan operator negasi ! di depan pemanggilan contains -->
+    <regex pattern="!(\w+\.contains(Key)?\()" id="logika.hapus_negasi">
+      <mutation text="$1"/>
+    </regex>
+
+    <!-- ============================================================ -->
+    <!-- B. OPERATOR RELASIONAL                                       -->
+    <!-- ============================================================ -->
+    <literal text="==" id="relasional.eq_ke_neq">
+      <mutation text="!="/>
+    </literal>
+    <literal text="!=" id="relasional.neq_ke_eq">
+      <mutation text="=="/>
+    </literal>
+    <!-- Pembanding waktu (< menjadi >, dan sebaliknya) -->
+    <literal text=".isBefore(" id="relasional.before_ke_after">
+      <mutation text=".isAfter("/>
+    </literal>
+    <literal text=".isAfter(" id="relasional.after_ke_before">
+      <mutation text=".isBefore("/>
+    </literal>
+    <!-- Batas waktu: a < b menjadi a <= b, dan a > b menjadi a >= b -->
+    <regex pattern="(\w+)\.isBefore\(" id="relasional.before_ke_before_eq">
+      <mutation text="!$1.isAfter("/>
+    </regex>
+    <regex pattern="(\w+)\.isAfter\(" id="relasional.after_ke_after_eq">
+      <mutation text="!$1.isBefore("/>
+    </regex>
+
+    <!-- ============================================================ -->
+    <!-- C. OPERATOR ARITMATIKA                                       -->
+    <!-- ============================================================ -->
+    <regex pattern="\+([^=+])" id="aritmatika.tambah_ke_kurang">
+      <mutation text="-$1"/>
+    </regex>
+    <regex pattern="-([^=>-])" id="aritmatika.kurang_ke_tambah">
+      <mutation text="+$1"/>
+    </regex>
+    <regex pattern="\*([^=])" id="aritmatika.kali_ke_bagi">
+      <mutation text="/$1"/>
+    </regex>
+    <regex pattern="([^/])/([^=/])" id="aritmatika.bagi_ke_kali">
+      <mutation text="$1*$2"/>
+    </regex>
+    <!-- Aritmatika waktu: pengurangan durasi menjadi penambahan -->
+    <literal text=".subtract(" id="aritmatika.subtract_ke_add">
+      <mutation text=".add("/>
+    </literal>
+    <!-- Konstanta durasi H-1 jam -->
+    <literal text="Duration(hours: 1)" id="aritmatika.konstanta_durasi">
+      <mutation text="Duration(hours: 0)"/>
+      <mutation text="Duration(hours: 2)"/>
+    </literal>
+
+    <!-- ============================================================ -->
+    <!-- D. PERUBAHAN EKSPRESI / PEMANGGILAN                         -->
+    <!-- ============================================================ -->
+    <!-- Penghapusan pemanggilan (statement deletion) -->
+    <regex pattern="([{]\s*)([^\(;=\s}]+\([^;]+\)\s*;)" id="ekspresi.hapus_pemanggilan1">
+      <mutation text="$1"/>
+    </regex>
+    <regex pattern="([};]\s*)([^\(;=\s}]+\([^;]+\)\s*;)" id="ekspresi.hapus_pemanggilan2">
+      <mutation text="$1"/>
+    </regex>
+    <!-- Penghapusan continue (filter dilewati) -->
+    <literal text="continue;" id="ekspresi.hapus_continue">
+      <mutation text=";"/>
+    </literal>
+    <!-- Penggantian operand (variable replacement): atribut diambil dari
+         entitas yang salah, a.x menjadi b.x dan sebaliknya (swapVehicles) -->
+    <regex pattern="(\w+): a\.(\w+)" id="ekspresi.ganti_operand_a_ke_b">
+      <mutation text="$1: b.$2"/>
+    </regex>
+    <regex pattern="(\w+): b\.(\w+)" id="ekspresi.ganti_operand_b_ke_a">
+      <mutation text="$1: a.$2"/>
+    </regex>
+    <!-- Pembalikan urutan pembanding pada sort -->
+    <literal text="(a, b) =>" id="ekspresi.balik_komparator">
+      <mutation text="(b, a) =>"/>
+    </literal>
+    <!-- Penggantian konstanta status peminjaman -->
+    <literal text="'SUBMITTED'" id="ekspresi.status_submitted">
+      <mutation text="'APPROVAL_1'"/>
+    </literal>
+    <literal text="'APPROVAL_1'" id="ekspresi.status_approval1">
+      <mutation text="'APPROVAL_2'"/>
+    </literal>
+    <literal text="'APPROVAL_2'" id="ekspresi.status_approval2">
+      <mutation text="'APPROVAL_3'"/>
+    </literal>
+    <literal text="'ON_GOING'" id="ekspresi.status_ongoing">
+      <mutation text="'APPROVAL_3'"/>
+    </literal>
+  </rules>
+
+  <exclude>
+    <!-- Komentar dan import tidak dimutasi -->
+    <token begin="//" end="\n"/>
+    <token begin="import &apos;" end="&apos;;"/>
+    <regex pattern="/[*].*?[*]/" dotAll="true"/>
+    <regex pattern="\+\+"/>
+    <regex pattern="--"/>
+  </exclude>
+</mutations>
