@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<undetected-mutations>
+<program-version>mutation-test version: 1.8.0</program-version>
+<elapsed>0:10:34.964006</elapsed>
+<result rating="C" success="false"/>
+<rules>
+<ruleset document="mutation_test.xml"/></rules>
+<file name="lib/utils/booking_logic.dart">
+<mutation line="36">
+<original>    return newStart.isBefore(existingEnd) &amp;&amp; newEnd.isAfter(existingStart);</original>
+<modified>    return newStart.isBefore(existingEnd) || newEnd.isAfter(existingStart);</modified>
+</mutation>
+<mutation line="92">
+<original>  static const List&lt;String&gt; blockingStatuses = [&apos;APPROVAL_2&apos;, &apos;APPROVAL_3&apos;, &apos;ON_GOING&apos;];</original>
+<modified>  static const List&lt;String&gt; blockingStatuses = [&apos;APPROVAL_3&apos;, &apos;APPROVAL_3&apos;, &apos;ON_GOING&apos;];</modified>
+</mutation>
+<mutation line="120">
+<original>      if (b.id == currentBookingId) continue;</original>
+<modified>      if (b.id == currentBookingId) ;</modified>
+</mutation>
+<mutation line="147">
+<original>    }
+
+    result.sort((a, b) =&gt; rank(a.category).compareTo(rank(b.category)));</original>
+<modified>    }
+
+    </modified>
+</mutation>
+<mutation line="149">
+<original>    result.sort((a, b) =&gt; rank(a.category).compareTo(rank(b.category)));</original>
+<modified>    result.sort((b, a) =&gt; rank(a.category).compareTo(rank(b.category)));</modified>
+</mutation>
+<mutation line="168">
+<original>      if (currentStatus != &apos;SUBMITTED&apos;) {</original>
+<modified>      if (currentStatus == &apos;SUBMITTED&apos;) {</modified>
+</mutation>
+<mutation line="168">
+<original>      if (currentStatus != &apos;SUBMITTED&apos;) {</original>
+<modified>      if (currentStatus != &apos;APPROVAL_1&apos;) {</modified>
+</mutation>
+<mutation line="168">
+<original>      if (currentStatus != &apos;SUBMITTED&apos;) {</original>
+<modified>      if (!(currentStatus != &apos;SUBMITTED&apos;)) {</modified>
+</mutation>
+<mutation line="171">
+<original>      return const ApprovalResult.ok(&apos;APPROVAL_1&apos;);</original>
+<modified>      return const ApprovalResult.ok(&apos;APPROVAL_2&apos;);</modified>
+</mutation>
+<mutation line="183">
+<original>    } else if (role == &apos;admin&apos; || role == &apos;manager_umum&apos;) {</original>
+<modified>    } else if (role == &apos;admin&apos; || role != &apos;manager_umum&apos;) {</modified>
+</mutation>
+<mutation line="183">
+<original>    } else if (role == &apos;admin&apos; || role == &apos;manager_umum&apos;) {</original>
+<modified>    } else if (role == &apos;admin&apos; ||!( role == &apos;manager_umum&apos;)) {</modified>
+</mutation>
+<mutation line="193">
+<original>    return now.isAfter(waktuPinjam.subtract(const Duration(hours: 1)));</original>
+<modified>    return now.isBefore(waktuPinjam.subtract(const Duration(hours: 1)));</modified>
+</mutation>
+<mutation line="193">
+<original>    return now.isAfter(waktuPinjam.subtract(const Duration(hours: 1)));</original>
+<modified>    return now.isAfter(waktuPinjam.add(const Duration(hours: 1)));</modified>
+</mutation>
+<mutation line="193">
+<original>    return now.isAfter(waktuPinjam.subtract(const Duration(hours: 1)));</original>
+<modified>    return now.isAfter(waktuPinjam.subtract(const Duration(hours: 0)));</modified>
+</mutation>
+<mutation line="193">
+<original>    return now.isAfter(waktuPinjam.subtract(const Duration(hours: 1)));</original>
+<modified>    return now.isAfter(waktuPinjam.subtract(const Duration(hours: 2)));</modified>
+</mutation>
+<mutation line="193">
+<original>    return now.isAfter(waktuPinjam.subtract(const Duration(hours: 1)));</original>
+<modified>    return !now.isBefore(waktuPinjam.subtract(const Duration(hours: 1)));</modified>
+</mutation>
+</file>
+</undetected-mutations>

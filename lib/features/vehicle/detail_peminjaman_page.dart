@@ -410,6 +410,27 @@ void _showSnackBar(String message) {
   }
 }
 
+/// Mengubah dokumen Firestore `vehicle_bookings` menjadi [BookingSlot]
+/// agar bisa diproses oleh fungsi murni di [BookingLogic].
+/// Mengembalikan null bila vehicleId kosong.
+BookingSlot? _toBookingSlot(DocumentSnapshot<Map<String, dynamic>> doc) {
+  final data = doc.data();
+  final vehicleId = data?['vehicleId'] as String?;
+  if (data == null || vehicleId == null || vehicleId.isEmpty) return null;
+  DateTime toDate(dynamic raw) => raw is Timestamp
+      ? raw.toDate()
+      : raw is DateTime
+          ? raw
+          : DateTime.fromMillisecondsSinceEpoch(0);
+  return BookingSlot(
+    id: doc.id,
+    vehicleId: vehicleId,
+    status: (data['status'] as String?) ?? '',
+    start: toDate(data['waktuPinjam']),
+    end: toDate(data['waktuKembali']),
+  );
+}
+
 Future<void> _showSelectVehicleDialog() async {
   try {
     final vehiclesSnapshot = await FirebaseFirestore.instance
@@ -436,17 +457,6 @@ Future<void> _showSelectVehicleDialog() async {
         .where('status', isEqualTo: 'ON_GOING')
         .get();
 
-    // ✅ vehicleId yang sedang ON_GOING (kendaraan sudah diambil)
-    Set<String> hardUnavailableVehicleIds = {};
-    for (var doc in onGoingSnapshot.docs) {
-      // Skip booking ini sendiri
-      if (doc.id == widget.data['id']) continue;
-      final vehicleId = doc.data()['vehicleId'] as String?;
-      if (vehicleId != null) {
-        hardUnavailableVehicleIds.add(vehicleId);
-      }
-    }
-
     // ✅ Ambil semua booking non-ON_GOING aktif — untuk deteksi soft booked (swap)
     final activeSnapshot = await FirebaseFirestore.instance
         .collection('vehicle_bookings')
@@ -455,49 +465,33 @@ Future<void> _showSelectVehicleDialog() async {
         ])
         .get();
 
-    // key: vehicleId, value: bookingId yang memakai kendaraan tersebut
-    Map<String, String> softBookedVehicleIds = {};
-    for (var doc in activeSnapshot.docs) {
-      if (doc.id == widget.data['id']) continue;
-      final vehicleId = doc.data()['vehicleId'] as String?;
-      if (vehicleId != null) {
-        softBookedVehicleIds[vehicleId] = doc.id;
-      }
-    }
+    // ✅ Klasifikasi kendaraan (current / free / soft-booked / hard-unavailable)
+    //    sepenuhnya dilakukan oleh BookingLogic.classifyVehicles (fungsi murni).
+    final bookingSlots = [
+      ...onGoingSnapshot.docs,
+      ...activeSnapshot.docs,
+    ].map(_toBookingSlot).whereType<BookingSlot>().toList();
 
-    final currentVehicleId = _bookingData?['vehicleId'];
+    final docsById = {for (final doc in vehiclesSnapshot.docs) doc.id: doc};
 
-    final vehiclesWithStatus = vehiclesSnapshot.docs.map((doc) {
-      final isHardUnavailable = hardUnavailableVehicleIds.contains(doc.id);
-      final isSoftBooked = softBookedVehicleIds.containsKey(doc.id);
-      final isCurrentVehicle = doc.id == currentVehicleId;
+    final classified = BookingLogic.classifyVehicles(
+      vehicleIds: docsById.keys.toList(),
+      bookings: bookingSlots,
+      currentBookingId: widget.data['id'] as String,
+      currentVehicleId: _bookingData?['vehicleId'] as String?,
+    );
 
+    // Hasil classifyVehicles sudah terurut:
+    // kendaraan saat ini → bebas → soft booked → hard unavailable
+    final vehiclesWithStatus = classified.map((c) {
       return {
-        'doc': doc,
-        'isHardUnavailable': isHardUnavailable,
-        'isSoftBooked': isSoftBooked,
-        'isCurrentVehicle': isCurrentVehicle,
-        'otherBookingId': softBookedVehicleIds[doc.id],
+        'doc': docsById[c.vehicleId]!,
+        'isHardUnavailable': c.category == VehicleCategory.hardUnavailable,
+        'isSoftBooked': c.category == VehicleCategory.softBooked,
+        'isCurrentVehicle': c.category == VehicleCategory.current,
+        'otherBookingId': c.otherBookingId,
       };
     }).toList();
-
-    // Urutan: kendaraan saat ini → bebas → soft booked → hard unavailable
-    vehiclesWithStatus.sort((a, b) {
-      final aCurrent = a['isCurrentVehicle'] as bool? ?? false;
-      final bCurrent = b['isCurrentVehicle'] as bool? ?? false;
-      final aHard = a['isHardUnavailable'] as bool? ?? false;
-      final bHard = b['isHardUnavailable'] as bool? ?? false;
-      final aSoft = a['isSoftBooked'] as bool? ?? false;
-      final bSoft = b['isSoftBooked'] as bool? ?? false;
-
-      if (aCurrent) return -1;
-      if (bCurrent) return 1;
-      if (aHard && !bHard) return 1;
-      if (bHard && !aHard) return -1;
-      if (aSoft && !bSoft) return 1;
-      if (bSoft && !aSoft) return -1;
-      return 0;
-    });
 
     final selectedVehicle = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -684,6 +678,9 @@ Future<void> _updateVehicle(Map<String, dynamic> newVehicle) async {
     final newVehicleName = newVehicle['nama'];
     final otherBookingId = newVehicle['otherBookingId'] as String?;
 
+    // Kendaraan akhir untuk booking ini (berubah via swapVehicles bila terjadi penukaran)
+    String thisBookingVehicleId = newVehicleId as String;
+
     // ✅ Cek apakah kendaraan baru sedang dipakai booking lain (perlu swap)
     if (otherBookingId != null && oldVehicleId != null) {
       // Konfirmasi swap ke operator
@@ -739,11 +736,34 @@ Future<void> _updateVehicle(Map<String, dynamic> newVehicle) async {
           .get();
 
       if (otherBookingDoc.exists) {
+        // ✅ Penukaran kendaraan dihitung oleh BookingLogic.swapVehicles (fungsi murni):
+        //    booking ini memegang kendaraan lama, booking lain memegang kendaraan baru.
+        final otherSlot = _toBookingSlot(otherBookingDoc);
+        final thisSlot = BookingSlot(
+          id: widget.data['id'] as String,
+          vehicleId: oldVehicleId as String,
+          status: (_bookingData?['status'] as String?) ?? '',
+          start: otherSlot?.start ?? DateTime.fromMillisecondsSinceEpoch(0),
+          end: otherSlot?.end ?? DateTime.fromMillisecondsSinceEpoch(0),
+        );
+        final swapped = BookingLogic.swapVehicles(
+          thisSlot,
+          BookingSlot(
+            id: otherBookingId,
+            vehicleId: newVehicleId,
+            status: otherSlot?.status ?? '',
+            start: otherSlot?.start ?? DateTime.fromMillisecondsSinceEpoch(0),
+            end: otherSlot?.end ?? DateTime.fromMillisecondsSinceEpoch(0),
+          ),
+        );
+        thisBookingVehicleId = swapped[0].vehicleId;
+        final otherBookingVehicleId = swapped[1].vehicleId;
+
         await FirebaseFirestore.instance
             .collection('vehicle_bookings')
             .doc(otherBookingId)
             .update({
-          'vehicleId': oldVehicleId,
+          'vehicleId': otherBookingVehicleId,
           'vehicle': {
             'nama': oldVehicleName,
             'platNomor': oldVehiclePlatNomor ?? '-',
@@ -778,7 +798,7 @@ Future<void> _updateVehicle(Map<String, dynamic> newVehicle) async {
         .collection('vehicle_bookings')
         .doc(widget.data['id'])
         .update({
-      'vehicleId': newVehicleId,
+      'vehicleId': thisBookingVehicleId,
       'vehicle': {
         'nama': newVehicleName,
         'platNomor': newVehicle['platNomor'],
@@ -2523,9 +2543,7 @@ String _getTimelineDate(String status) {
                           builder: (context) {
                             // Cek apakah sudah H-1 jam sebelum waktu pinjam
                             final bool formTersedia = waktuPinjam != null &&
-                                DateTime.now().isAfter(
-                                  waktuPinjam.subtract(const Duration(hours: 1)),
-                                );
+                                BookingLogic.isFormAvailable(waktuPinjam, DateTime.now());
 
                             // Hitung sisa waktu jika belum tersedia
                             String pesanWaktu = '';

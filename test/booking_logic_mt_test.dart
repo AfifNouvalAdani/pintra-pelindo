@@ -1,331 +1,436 @@
+// Lokasi: test/booking_logic_mt_test.dart
+//
+// Test suite Metamorphic Testing (MT) untuk modul peminjaman kendaraan
+// operasional PINTRA. Berisi tepat 11 Metamorphic Relation (MR-1 s.d. MR-11)
+// pada 7 fungsi yang diuji (Tabel 3.1 proposal):
+//   isTimeConflict, availableVehicleIds, classifyVehicles, swapVehicles,
+//   approveTransition, isFormAvailable, calculateCompleteness.
+//
+// Setiap MR terdiri atas: source test case -> transformasi -> follow-up test
+// case -> pemeriksaan relasi output. Data uji dibangkitkan berulang (iterasi)
+// dengan seed tetap per MR (deterministik dan tidak bergantung urutan test),
+// ditambah kasus nilai batas (boundary values) yang relevan.
+
 import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pintra/utils/booking_logic.dart';
 
-// Helper untuk membuat data booking acak
-final rnd = Random(42); // Seed tetap agar hasil deterministik
 final baseTime = DateTime(2026, 9, 1, 0, 0);
+const allStatuses = ['SUBMITTED', 'APPROVAL_1', 'APPROVAL_2', 'APPROVAL_3', 'ON_GOING'];
+const softStatuses = ['SUBMITTED', 'APPROVAL_1', 'APPROVAL_2', 'APPROVAL_3'];
+final vehicles = List.generate(5, (i) => 'v$i');
 
-BookingSlot randomSlot(int i) {
+/// Membangkitkan satu jadwal peminjaman acak.
+BookingSlot randomSlot(Random rnd, int i, {List<String> statuses = allStatuses}) {
   final s = rnd.nextInt(72);
   final len = 1 + rnd.nextInt(6);
   return BookingSlot(
     id: 'b$i',
-    vehicleId: 'v${rnd.nextInt(5)}',
-    status: ['SUBMITTED', 'APPROVAL_1', 'APPROVAL_2', 'APPROVAL_3', 'ON_GOING'][rnd.nextInt(5)],
+    vehicleId: vehicles[rnd.nextInt(vehicles.length)],
+    status: statuses[rnd.nextInt(statuses.length)],
     start: baseTime.add(Duration(hours: s)),
     end: baseTime.add(Duration(hours: s + len)),
   );
 }
 
+/// Membangkitkan rentang waktu acak [start, end) dengan durasi >= 1 jam.
+(DateTime, DateTime) randomRange(Random rnd, {int maxStart = 50, int maxLen = 10}) {
+  final start = baseTime.add(Duration(hours: rnd.nextInt(maxStart)));
+  return (start, start.add(Duration(hours: 1 + rnd.nextInt(maxLen))));
+}
+
 void main() {
   group('Metamorphic Tests untuk BookingLogic', () {
-    
-    // 1. Uji isTimeConflict
-    test('MR 1 (Simetri): isTimeConflict(A, B) == isTimeConflict(B, A)', () {
-      for (var i = 0; i < 100; i++) {
-        final start1 = baseTime.add(Duration(hours: rnd.nextInt(50)));
-        final end1 = start1.add(Duration(hours: 1 + rnd.nextInt(10)));
-        
-        final start2 = baseTime.add(Duration(hours: rnd.nextInt(50)));
-        final end2 = start2.add(Duration(hours: 1 + rnd.nextInt(10)));
+    // ===================================================================
+    // MR-1 (Simetri) - isTimeConflict
+    // ===================================================================
+    test('MR-1 (Simetri): isTimeConflict(A, B) == isTimeConflict(B, A)', () {
+      final rnd = Random(1);
+      final pairs = <List<DateTime>>[];
 
-        final result1 = BookingLogic.isTimeConflict(start1, end1, start2, end2);
-        final result2 = BookingLogic.isTimeConflict(start2, end2, start1, end1);
+      // Iterasi acak
+      for (var i = 0; i < 200; i++) {
+        final (s1, e1) = randomRange(rnd);
+        final (s2, e2) = randomRange(rnd);
+        pairs.add([s1, e1, s2, e2]);
+      }
 
-        expect(result1, equals(result2));
+      // Nilai batas
+      final t0 = baseTime;
+      final t1 = baseTime.add(const Duration(hours: 1));
+      final t2 = baseTime.add(const Duration(hours: 2));
+      final t3 = baseTime.add(const Duration(hours: 3));
+      final m = const Duration(minutes: 1);
+      pairs.addAll([
+        [t0, t1, t1, t2], // bersentuhan tepat di ujung (tidak bentrok)
+        [t0, t1.add(m), t1, t2], // irisan 1 menit
+        [t0, t2, t0, t2], // rentang identik
+        [t0, t3, t1, t2], // A memuat B
+        [t0, t1, t2, t3], // terpisah
+      ]);
+
+      for (final p in pairs) {
+        final source = BookingLogic.isTimeConflict(p[0], p[1], p[2], p[3]);
+        final followUp = BookingLogic.isTimeConflict(p[2], p[3], p[0], p[1]);
+        expect(followUp, equals(source), reason: 'A=${p[0]}-${p[1]}, B=${p[2]}-${p[3]}');
       }
     });
 
-    // 2. Uji calculateCompleteness
-    test('MR 2 (Monotonisitas): calculateCompleteness bertambah jika item true ditambah', () {
-      final baseItems = [true, false, false, false, false];
-      final baseScore = BookingLogic.calculateCompleteness(baseItems);
+    // ===================================================================
+    // MR-2 (Monotonisitas) - calculateCompleteness
+    // ===================================================================
+    test('MR-2 (Monotonisitas): mengubah item false menjadi true menaikkan persentase', () {
+      final rnd = Random(2);
+      final sources = <List<bool>>[];
 
-      // Ubah satu false menjadi true
-      final improvedItems = [true, true, false, false, false];
-      final improvedScore = BookingLogic.calculateCompleteness(improvedItems);
+      // Iterasi acak: panjang 1..20, minimal satu item false
+      for (var i = 0; i < 200; i++) {
+        final len = 1 + rnd.nextInt(20);
+        final items = List.generate(len, (_) => rnd.nextBool());
+        items[rnd.nextInt(len)] = false;
+        sources.add(items);
+      }
 
-      expect(improvedScore > baseScore, isTrue);
+      // Nilai batas
+      sources.addAll([
+        [false], // satu item
+        [false, false, false, false, false], // semua false (0%)
+        [true, true, true, true, false], // tinggal satu false
+      ]);
+
+      for (final source in sources) {
+        final sourceScore = BookingLogic.calculateCompleteness(source);
+
+        // Transformasi: ubah satu atau beberapa item false menjadi true
+        final falseIdx = [for (var i = 0; i < source.length; i++) if (!source[i]) i];
+        final flipCount = 1 + rnd.nextInt(falseIdx.length);
+        final followUp = List<bool>.from(source);
+        for (final idx in (falseIdx..shuffle(rnd)).take(flipCount)) {
+          followUp[idx] = true;
+        }
+        final followUpScore = BookingLogic.calculateCompleteness(followUp);
+
+        expect(followUpScore, greaterThan(sourceScore), reason: 'source=$source, followUp=$followUp');
+      }
     });
 
-    // 3. Uji isFormAvailable
-    test('MR 3 (Translasi Waktu): isFormAvailable tidak berubah jika kedua waktu digeser konstan', () {
-      final waktuPinjam = baseTime.add(const Duration(hours: 10));
-      final now = baseTime.add(const Duration(hours: 8)); // Belum tersedia (H-2)
+    // ===================================================================
+    // MR-3 (Translasi Waktu) - isFormAvailable
+    // ===================================================================
+    test('MR-3 (Translasi Waktu): menggeser waktu pinjam dan now dengan konstanta sama tidak mengubah hasil', () {
+      final rnd = Random(3);
 
-      final originalResult = BookingLogic.isFormAvailable(waktuPinjam, now);
+      // Selisih (now - waktuPinjam) dalam menit, termasuk nilai batas di sekitar H-1 jam
+      final offsets = <int>[
+        -61, -60, -59, // tepat di sekitar batas H-1 jam
+        -24 * 60, -120, -1, 0, 1, 60, 24 * 60,
+        for (var i = 0; i < 100; i++) rnd.nextInt(10 * 60) - 5 * 60,
+      ];
+      final shifts = <Duration>[
+        const Duration(hours: 24),
+        const Duration(hours: -24),
+        const Duration(minutes: 1),
+        const Duration(days: 30),
+      ];
 
-      // Geser keduanya +24 jam
-      const shift = Duration(hours: 24);
-      final shiftedResult = BookingLogic.isFormAvailable(
-        waktuPinjam.add(shift), 
-        now.add(shift)
-      );
+      for (final off in offsets) {
+        final waktuPinjam = baseTime.add(Duration(hours: 10 + rnd.nextInt(100)));
+        final now = waktuPinjam.add(Duration(minutes: off));
+        final source = BookingLogic.isFormAvailable(waktuPinjam, now);
 
-      expect(shiftedResult, equals(originalResult));
+        for (final shift in [...shifts, Duration(minutes: rnd.nextInt(100000))]) {
+          final followUp = BookingLogic.isFormAvailable(waktuPinjam.add(shift), now.add(shift));
+          expect(followUp, equals(source), reason: 'offset=${off}m, shift=$shift');
+        }
+      }
     });
 
-    // 4. Uji availableVehicleIds
-    test('MR 4 (Subset Ketersediaan): Mempersempit rentang waktu tidak boleh mengurangi kendaraan tersedia', () {
-      final vehicles = List.generate(5, (i) => 'v$i');
-      
-      for (var n = 0; n < 50; n++) {
-        final bookings = List.generate(10, randomSlot);
-        
-        final startLuas = baseTime.add(Duration(hours: 10 + rnd.nextInt(20)));
-        final endLuas = startLuas.add(Duration(hours: 10 + rnd.nextInt(5)));
+    // ===================================================================
+    // MR-4 (Subset Ketersediaan) - availableVehicleIds
+    // ===================================================================
+    test('MR-4 (Subset Ketersediaan): mempersempit rentang tidak mengurangi kendaraan tersedia', () {
+      final rnd = Random(4);
 
+      void checkMR4(List<BookingSlot> bookings, DateTime startLuas, DateTime endLuas) {
         final hasilLuas = BookingLogic.availableVehicleIds(vehicles, bookings, startLuas, endLuas);
-        
-        // Persempit rentang: start digeser 2 jam lebih akhir, end digeser 2 jam lebih awal
+
+        // Transformasi: start +2 jam, end -2 jam
         final startSempit = startLuas.add(const Duration(hours: 2));
         final endSempit = endLuas.subtract(const Duration(hours: 2));
-        
         final hasilSempit = BookingLogic.availableVehicleIds(vehicles, bookings, startSempit, endSempit);
 
-        // Jumlah kendaraan di rentang sempit harus >= rentang luas
-        expect(hasilSempit.length >= hasilLuas.length, isTrue);
-        // Semua kendaraan di rentang luas harus tetap ada di rentang sempit
-        expect(hasilSempit.toSet().containsAll(hasilLuas), isTrue);
+        expect(hasilSempit.toSet().containsAll(hasilLuas), isTrue,
+            reason: 'luas=$hasilLuas, sempit=$hasilSempit');
       }
+
+      // Iterasi acak
+      for (var n = 0; n < 100; n++) {
+        final bookings = List.generate(10, (i) => randomSlot(rnd, i));
+        final startLuas = baseTime.add(Duration(hours: 10 + rnd.nextInt(20)));
+        final endLuas = startLuas.add(Duration(hours: 10 + rnd.nextInt(5)));
+        checkMR4(bookings, startLuas, endLuas);
+      }
+
+      // Nilai batas: jadwal pemblokir yang bersentuhan/beririsan tepat di tepi rentang
+      final startLuas = baseTime.add(const Duration(hours: 10));
+      final endLuas = baseTime.add(const Duration(hours: 20));
+      final edge = [
+        BookingSlot(id: 'e1', vehicleId: 'v0', status: 'ON_GOING', start: baseTime, end: startLuas), // bersentuhan di awal
+        BookingSlot(id: 'e2', vehicleId: 'v1', status: 'APPROVAL_2', start: endLuas, end: endLuas.add(const Duration(hours: 1))), // bersentuhan di akhir
+        BookingSlot(id: 'e3', vehicleId: 'v2', status: 'APPROVAL_3', start: baseTime, end: startLuas.add(const Duration(hours: 1))), // irisan hanya di bagian luas
+        BookingSlot(id: 'e4', vehicleId: 'v3', status: 'ON_GOING', start: startLuas.add(const Duration(hours: 2)), end: endLuas.subtract(const Duration(hours: 2))), // tepat sama dengan rentang sempit
+      ];
+      checkMR4(edge, startLuas, endLuas);
     });
 
-    test('MR 5 (Permutasi Daftar Jadwal): availableVehicleIds invarian terhadap acakan urutan booking', () {
-      final vehicles = List.generate(5, (i) => 'v$i');
-      for (var n = 0; n < 50; n++) {
-        final bookings = List.generate(10, randomSlot);
-        final start = baseTime.add(const Duration(hours: 10));
-        final end = start.add(const Duration(hours: 5));
+    // ===================================================================
+    // MR-5 (Permutasi Daftar Jadwal) - availableVehicleIds
+    // ===================================================================
+    test('MR-5 (Permutasi Daftar Jadwal): availableVehicleIds invarian terhadap urutan booking', () {
+      final rnd = Random(5);
+      for (var n = 0; n < 100; n++) {
+        final bookings = List.generate(1 + rnd.nextInt(15), (i) => randomSlot(rnd, i));
+        final (start, end) = randomRange(rnd, maxStart: 72, maxLen: 8);
 
-        final hasilAsli = BookingLogic.availableVehicleIds(vehicles, bookings, start, end).toSet();
-        
-        final shuffledBookings = List<BookingSlot>.from(bookings)..shuffle(Random(n));
-        final hasilAcak = BookingLogic.availableVehicleIds(vehicles, shuffledBookings, start, end).toSet();
+        final hasilAsli = BookingLogic.availableVehicleIds(vehicles, bookings, start, end);
+
+        final shuffled = List<BookingSlot>.from(bookings)..shuffle(rnd);
+        final hasilAcak = BookingLogic.availableVehicleIds(vehicles, shuffled, start, end);
 
         expect(hasilAcak, equals(hasilAsli));
       }
     });
 
-    // 5. Uji classifyVehicles
-    test('MR 6 (Permutasi Kategori): classifyVehicles invarian terhadap acakan urutan booking', () {
-      final vehicles = List.generate(5, (i) => 'v$i');
-      final bookings = List.generate(10, randomSlot);
-      const currentBookingId = 'b0';
-      const currentVehicleId = 'v0';
+    // ===================================================================
+    // MR-6 (Permutasi Kategori) - classifyVehicles
+    // ===================================================================
+    test('MR-6 (Permutasi Kategori): classifyVehicles invarian terhadap urutan booking', () {
+      final rnd = Random(6);
+      for (var n = 0; n < 100; n++) {
+        final bookings = List.generate(1 + rnd.nextInt(15), (i) => randomSlot(rnd, i));
+        final currentBookingId = 'b${rnd.nextInt(bookings.length)}';
+        final String? currentVehicleId = rnd.nextBool() ? vehicles[rnd.nextInt(vehicles.length)] : null;
 
-      final hasilAsli = BookingLogic.classifyVehicles(
-        vehicleIds: vehicles, 
-        bookings: bookings, 
-        currentBookingId: currentBookingId, 
-        currentVehicleId: currentVehicleId
-      );
+        final hasilAsli = BookingLogic.classifyVehicles(
+          vehicleIds: vehicles,
+          bookings: bookings,
+          currentBookingId: currentBookingId,
+          currentVehicleId: currentVehicleId,
+        );
 
-      final shuffledBookings = List<BookingSlot>.from(bookings)..shuffle(rnd);
-      
-      final hasilAcak = BookingLogic.classifyVehicles(
-        vehicleIds: vehicles, 
-        bookings: shuffledBookings, 
-        currentBookingId: currentBookingId, 
-        currentVehicleId: currentVehicleId
-      );
+        final shuffled = List<BookingSlot>.from(bookings)..shuffle(rnd);
+        final hasilAcak = BookingLogic.classifyVehicles(
+          vehicleIds: vehicles,
+          bookings: shuffled,
+          currentBookingId: currentBookingId,
+          currentVehicleId: currentVehicleId,
+        );
 
-      // Panjang dan urutan kategori harus sama persis karena fungsi memiliki sorting internal
-      expect(hasilAsli.length, equals(hasilAcak.length));
-      for (var i = 0; i < hasilAsli.length; i++) {
-        expect(hasilAsli[i].vehicleId, equals(hasilAcak[i].vehicleId));
-        expect(hasilAsli[i].category, equals(hasilAcak[i].category));
+        // Kategori dan urutan hasil klasifikasi harus sama persis
+        expect(hasilAcak.length, equals(hasilAsli.length));
+        for (var i = 0; i < hasilAsli.length; i++) {
+          expect(hasilAcak[i].vehicleId, equals(hasilAsli[i].vehicleId));
+          expect(hasilAcak[i].category, equals(hasilAsli[i].category));
+        }
       }
     });
 
-    // 6. Uji swapVehicles
-    test('MR 7 (Involusi): swapVehicles dua kali mengembalikan data ke asal', () {
-      // Dibuat eksplisit (bukan randomSlot) untuk menjamin vehicleId berbeda,
-      // sesuai deskripsi MR-7 di dokumen: "kendaraan yang berbeda"
-      final a = BookingSlot(
-        id: 'b1',
-        vehicleId: 'v1',
-        status: 'APPROVAL_1',
-        start: baseTime,
-        end: baseTime.add(const Duration(hours: 2)),
-      );
-      final b = BookingSlot(
-        id: 'b2',
-        vehicleId: 'v2',
-        status: 'APPROVAL_2',
-        start: baseTime.add(const Duration(hours: 5)),
-        end: baseTime.add(const Duration(hours: 7)),
-      );
+    // ===================================================================
+    // MR-7 (Involusi) - swapVehicles
+    // ===================================================================
+    test('MR-7 (Involusi): swap(swap(A, B)) mengembalikan kendaraan ke dokumen asal', () {
+      final rnd = Random(7);
+      for (var n = 0; n < 100; n++) {
+        final a = randomSlot(rnd, 1);
+        var b = randomSlot(rnd, 2);
+        // Prasyarat MR-7: kendaraan A dan B berbeda
+        while (b.vehicleId == a.vehicleId) {
+          b = randomSlot(rnd, 2);
+        }
+        expect(a.vehicleId, isNot(equals(b.vehicleId)));
 
-      // Pastikan prasyarat MR-7 terpenuhi sebelum transformasi dijalankan
-      expect(a.vehicleId, isNot(equals(b.vehicleId)));
+        final swap1 = BookingLogic.swapVehicles(a, b);
+        final swap2 = BookingLogic.swapVehicles(swap1[0], swap1[1]);
 
-      // Tukar pertama
-      final swap1 = BookingLogic.swapVehicles(a, b);
-      // Tukar kedua (kembalikan)
-      final swap2 = BookingLogic.swapVehicles(swap1[0], swap1[1]);
-
-      expect(swap2[0].vehicleId, equals(a.vehicleId));
-      expect(swap2[1].vehicleId, equals(b.vehicleId));
-    });
-    // 7. Uji approveTransition
-    test('MR 8 (Peralihan Bentrok): approveTransition merespons perubahan hasConflict dengan penolakan', () {
-      // Kondisi operator normal tanpa konflik
-      final resultAman = BookingLogic.approveTransition(
-        role: 'operator', 
-        jabatan: 'staf', 
-        currentStatus: 'APPROVAL_1', 
-        hasConflict: false
-      );
-      expect(resultAman.newStatus, equals('APPROVAL_2'));
-
-      // Kondisi yang sama persis, tapi ada konflik
-      final resultKonflik = BookingLogic.approveTransition(
-        role: 'operator', 
-        jabatan: 'staf', 
-        currentStatus: 'APPROVAL_1', 
-        hasConflict: true
-      );
-      expect(resultKonflik.error, equals('Kendaraan bentrok'));
-      expect(resultKonflik.newStatus, isNull);
+        // Kendaraan kembali ke pemilik asal, atribut lain tetap
+        for (final (orig, after) in [(a, swap2[0]), (b, swap2[1])]) {
+          expect(after.vehicleId, equals(orig.vehicleId));
+          expect(after.id, equals(orig.id));
+          expect(after.status, equals(orig.status));
+          expect(after.start, equals(orig.start));
+          expect(after.end, equals(orig.end));
+        }
+      }
     });
 
-    // Uji MR 9 (Elevasi Role): approveTransition
-    test('MR 9 (Elevasi Role): Persetujuan admin pada APPROVAL_2 menghasilkan level status > persetujuan operator pada APPROVAL_1', () {
-      // Source: operator menyetujui pada tahap APPROVAL_1
-      final resOperator = BookingLogic.approveTransition(
-        role: 'operator',
-        jabatan: 'staf',
-        currentStatus: 'APPROVAL_1',
-        hasConflict: false,
-      );
+    // ===================================================================
+    // MR-8 (Peralihan Bentrok) - approveTransition
+    // ===================================================================
+    test('MR-8 (Peralihan Bentrok): hasConflict false -> true mengubah persetujuan menjadi penolakan', () {
+      // Variasi atribut yang dipertahankan sama antara source dan follow-up
+      const jabatanList = ['staf', 'Staff', 'supervisor', 'manager divisi', ''];
+      const operatorTypes = <String?>[null, 'kendaraan'];
 
-      // Follow-up: role diganti admin pada tahap berikutnya (APPROVAL_2),
-      // jabatan dan hasConflict tetap sama
-      final resAdmin = BookingLogic.approveTransition(
-        role: 'admin',
-        jabatan: 'staf',
-        currentStatus: 'APPROVAL_2',
-        hasConflict: false,
-      );
+      for (final jabatan in jabatanList) {
+        for (final opType in operatorTypes) {
+          final source = BookingLogic.approveTransition(
+            role: 'operator',
+            jabatan: jabatan,
+            currentStatus: 'APPROVAL_1',
+            operatorType: opType,
+            hasConflict: false,
+          );
+          final followUp = BookingLogic.approveTransition(
+            role: 'operator',
+            jabatan: jabatan,
+            currentStatus: 'APPROVAL_1',
+            operatorType: opType,
+            hasConflict: true,
+          );
 
-      expect(resOperator.newStatus, isNotNull);
-      expect(resAdmin.newStatus, isNotNull);
-
-      // operator: APPROVAL_1 -> APPROVAL_2, admin: APPROVAL_2 -> APPROVAL_3
-      final opLevel = int.parse(resOperator.newStatus!.split('_')[1]);
-      final adminLevel = int.parse(resAdmin.newStatus!.split('_')[1]);
-      expect(adminLevel > opLevel, isTrue);
+          final ctx = 'jabatan="$jabatan", operatorType=$opType';
+          expect(source.newStatus, equals('APPROVAL_2'), reason: ctx);
+          expect(source.error, isNull, reason: ctx);
+          expect(followUp.newStatus, isNull, reason: ctx);
+          expect(followUp.error, equals('Kendaraan bentrok'), reason: ctx);
+        }
+      }
     });
 
-    // Uji boundary (pelengkap, bukan bagian dari MR-9)
-    test('Boundary approveTransition: penolakan role user dan admin pada status di luar kewenangan', () {
-      final resUserErr = BookingLogic.approveTransition(
-        role: 'user',
-        jabatan: 'manager divisi',
-        currentStatus: 'APPROVAL_1',
-      );
-      expect(resUserErr.error, equals('Hanya dapat menyetujui status SUBMITTED'));
+    // ===================================================================
+    // MR-9 (Elevasi Role) - approveTransition
+    // ===================================================================
+    test('MR-9 (Elevasi Role): level status hasil admin (APPROVAL_2) > hasil operator (APPROVAL_1)', () {
+      int level(String status) => int.parse(status.split('_')[1]);
+      const jabatanList = ['staf', 'Staff', 'supervisor', 'manager divisi', ''];
 
-      final resAdminErr = BookingLogic.approveTransition(
-        role: 'admin',
-        jabatan: 'manager_umum',
-        currentStatus: 'SUBMITTED',
-      );
-      expect(resAdminErr.error, equals('Hanya dapat menyetujui status APPROVAL_2'));
+      for (final jabatan in jabatanList) {
+        // Source: operator pada tahap kewenangannya (APPROVAL_1)
+        final resOperator = BookingLogic.approveTransition(
+          role: 'operator',
+          jabatan: jabatan,
+          currentStatus: 'APPROVAL_1',
+          hasConflict: false,
+        );
+        // Follow-up: role admin pada tahap berikutnya (APPROVAL_2); jabatan & hasConflict tetap
+        final resAdmin = BookingLogic.approveTransition(
+          role: 'admin',
+          jabatan: jabatan,
+          currentStatus: 'APPROVAL_2',
+          hasConflict: false,
+        );
+
+        final ctx = 'jabatan="$jabatan"';
+        expect(resOperator.newStatus, isNotNull, reason: ctx);
+        expect(resAdmin.newStatus, isNotNull, reason: ctx);
+        expect(level(resAdmin.newStatus!), greaterThan(level(resOperator.newStatus!)), reason: ctx);
+      }
     });
 
-    // Uji MR 10 (Transformasi Data/Status): availableVehicleIds
-    test('MR 10 (Restriksi Status): Mengubah status booking menjadi ON_GOING harus mengurangi ketersediaan', () {
-      final vehicles = List.generate(5, (i) => 'v$i');
-      final start = baseTime;
-      final end = baseTime.add(const Duration(hours: 2));
+    // ===================================================================
+    // MR-10 (Restriksi Status) - availableVehicleIds
+    // ===================================================================
+    test('MR-10 (Restriksi Status): SUBMITTED -> ON_GOING mengurangi jumlah kendaraan tersedia', () {
+      final rnd = Random(10);
 
-      // Source: Booking dengan status SUBMITTED (tidak memblokir kendaraan)
-      final sourceBookings = [
-        BookingSlot(id: 'b1', vehicleId: 'v1', status: 'SUBMITTED', start: start, end: end)
-      ];
-      final sourceAvail = BookingLogic.availableVehicleIds(vehicles, sourceBookings, start, end);
+      void checkMR10(String target, DateTime qStart, DateTime qEnd, DateTime bStart, DateTime bEnd) {
+        // Source: satu jadwal SUBMITTED (tidak memblokir) yang beririsan dengan rentang query
+        final source = [BookingSlot(id: 'b1', vehicleId: target, status: 'SUBMITTED', start: bStart, end: bEnd)];
+        final sourceAvail = BookingLogic.availableVehicleIds(vehicles, source, qStart, qEnd);
+        expect(sourceAvail.contains(target), isTrue); // prasyarat
 
-      // Prasyarat: v1 tersedia sebelum transformasi
-      expect(sourceAvail.contains('v1'), isTrue);
-      
-      // Follow-up: Status diubah menjadi ON_GOING (memblokir kendaraan)
-      final followUpBookings = [
-        BookingSlot(id: 'b1', vehicleId: 'v1', status: 'ON_GOING', start: start, end: end)
-      ];
-      final followUpAvail = BookingLogic.availableVehicleIds(vehicles, followUpBookings, start, end);
+        // Follow-up: status diubah menjadi ON_GOING; vehicleId & waktu tetap
+        final followUp = [BookingSlot(id: 'b1', vehicleId: target, status: 'ON_GOING', start: bStart, end: bEnd)];
+        final followUpAvail = BookingLogic.availableVehicleIds(vehicles, followUp, qStart, qEnd);
 
-      // Kendaraan yang tersedia setelah status diubah harus lebih sedikit
-      expect(followUpAvail.length < sourceAvail.length, isTrue);
-      // v1 harus hilang dari hasil follow-up
-      expect(followUpAvail.contains('v1'), isFalse);
+        expect(followUpAvail.length, lessThan(sourceAvail.length),
+            reason: 'target=$target, query=$qStart-$qEnd, booking=$bStart-$bEnd');
+      }
+
+      // Iterasi: setiap kendaraan, rentang beririsan acak
+      for (var n = 0; n < 100; n++) {
+        final target = vehicles[n % vehicles.length];
+        final (qStart, qEnd) = randomRange(rnd);
+        // Booking dipastikan beririsan: mulai sebelum qEnd, selesai setelah qStart
+        final bStart = qStart.subtract(Duration(hours: rnd.nextInt(5), minutes: rnd.nextInt(30)));
+        final bEnd = qStart.add(Duration(minutes: 1 + rnd.nextInt(qEnd.difference(qStart).inMinutes + 120)));
+        checkMR10(target, qStart, qEnd, bStart, bEnd);
+      }
+
+      // Nilai batas: irisan hanya 1 menit di awal dan di akhir rentang query
+      final qStart = baseTime.add(const Duration(hours: 10));
+      final qEnd = baseTime.add(const Duration(hours: 12));
+      const m = Duration(minutes: 1);
+      checkMR10('v1', qStart, qEnd, baseTime, qStart.add(m));
+      checkMR10('v2', qStart, qEnd, qEnd.subtract(m), qEnd.add(const Duration(hours: 3)));
+      checkMR10('v3', qStart, qEnd, qStart, qEnd); // rentang identik
     });
 
-    // MR 11 skenario (a): dari free
-    test('MR 11 (Pergeseran Kategori - dari free): Menambah jadwal ON_GOING menggeser kendaraan dari free ke hardUnavailable', () {
-      final vehicles = ['v1', 'v2'];
-      const currentBookingId = 'b0';
-      final end = baseTime.add(const Duration(hours: 2));
+    // ===================================================================
+    // MR-11 (Pergeseran Kategori) - classifyVehicles
+    // ===================================================================
+    group('MR-11 (Pergeseran Kategori)', () {
+      VehicleCategory categoryOf(List<VehicleClass> res, String id) =>
+          res.firstWhere((v) => v.vehicleId == id).category;
 
-      // Source: v1 soft-booked, v2 masih free
-      final sourceBookings = [
-        BookingSlot(id: 'b1', vehicleId: 'v1', status: 'APPROVAL_1', start: baseTime, end: end)
-      ];
-      final sourceClass = BookingLogic.classifyVehicles(
-        vehicleIds: vehicles, bookings: sourceBookings,
-        currentBookingId: currentBookingId, currentVehicleId: null,
-      );
+      test('MR-11 skenario (a): free -> hard-unavailable setelah menambah jadwal ON_GOING', () {
+        final rnd = Random(111);
+        for (var n = 0; n < 100; n++) {
+          final target = vehicles[n % vehicles.length];
+          // Jadwal latar acak pada kendaraan lain (target dipastikan free)
+          final background = List.generate(rnd.nextInt(8), (i) => randomSlot(rnd, i + 1))
+              .where((b) => b.vehicleId != target)
+              .toList();
 
-      // Prasyarat: v2 berstatus free
-      final sV2Check = sourceClass.firstWhere((v) => v.vehicleId == 'v2');
-      expect(sV2Check.category, equals(VehicleCategory.free));
+          final source = BookingLogic.classifyVehicles(
+            vehicleIds: vehicles, bookings: background,
+            currentBookingId: 'b0', currentVehicleId: null,
+          );
+          expect(categoryOf(source, target), equals(VehicleCategory.free)); // prasyarat
 
-      // Follow-up: tambah jadwal ON_GOING pada v2
-      final followUpBookings = [
-        ...sourceBookings,
-        BookingSlot(id: 'b2', vehicleId: 'v2', status: 'ON_GOING', start: baseTime, end: end)
-      ];
-      final followUpClass = BookingLogic.classifyVehicles(
-        vehicleIds: vehicles, bookings: followUpBookings,
-        currentBookingId: currentBookingId, currentVehicleId: null,
-      );
+          final followUpBookings = [
+            ...background,
+            BookingSlot(id: 'new', vehicleId: target, status: 'ON_GOING', start: baseTime, end: baseTime.add(const Duration(hours: 2))),
+          ];
+          final followUp = BookingLogic.classifyVehicles(
+            vehicleIds: vehicles, bookings: followUpBookings,
+            currentBookingId: 'b0', currentVehicleId: null,
+          );
+          expect(categoryOf(followUp, target), equals(VehicleCategory.hardUnavailable));
+        }
+      });
 
-      final fV2 = followUpClass.firstWhere((v) => v.vehicleId == 'v2');
-      expect(fV2.category, equals(VehicleCategory.hardUnavailable));
+      test('MR-11 skenario (b): soft-booked -> hard-unavailable setelah status jadwal diubah ke ON_GOING', () {
+        final rnd = Random(112);
+        for (var n = 0; n < 100; n++) {
+          final target = vehicles[n % vehicles.length];
+          final softStatus = softStatuses[n % softStatuses.length]; // semua status soft
+          final background = List.generate(rnd.nextInt(8), (i) => randomSlot(rnd, i + 1))
+              .where((b) => b.vehicleId != target)
+              .toList();
+          final targetSlot = BookingSlot(
+            id: 'tgt', vehicleId: target, status: softStatus,
+            start: baseTime, end: baseTime.add(const Duration(hours: 2)),
+          );
+
+          final source = BookingLogic.classifyVehicles(
+            vehicleIds: vehicles, bookings: [...background, targetSlot],
+            currentBookingId: 'b0', currentVehicleId: null,
+          );
+          expect(categoryOf(source, target), equals(VehicleCategory.softBooked)); // prasyarat
+
+          // Follow-up: status jadwal yang sama diubah menjadi ON_GOING (tanpa menambah jadwal)
+          final changed = BookingSlot(
+            id: targetSlot.id, vehicleId: target, status: 'ON_GOING',
+            start: targetSlot.start, end: targetSlot.end,
+          );
+          final followUp = BookingLogic.classifyVehicles(
+            vehicleIds: vehicles, bookings: [...background, changed],
+            currentBookingId: 'b0', currentVehicleId: null,
+          );
+          expect(categoryOf(followUp, target), equals(VehicleCategory.hardUnavailable));
+        }
+      });
     });
-
-    // MR 11 skenario (b): dari soft-booked
-    test('MR 11 (Pergeseran Kategori - dari soft-booked): Mengubah status jadwal menjadi ON_GOING menggeser kendaraan dari softBooked ke hardUnavailable', () {
-      final vehicles = ['v1', 'v2'];
-      const currentBookingId = 'b0';
-      final end = baseTime.add(const Duration(hours: 2));
-
-      // Source: v2 soft-booked (APPROVAL_1)
-      final sourceBookings = [
-        BookingSlot(id: 'b1', vehicleId: 'v2', status: 'APPROVAL_1', start: baseTime, end: end)
-      ];
-      final sourceClass = BookingLogic.classifyVehicles(
-        vehicleIds: vehicles, bookings: sourceBookings,
-        currentBookingId: currentBookingId, currentVehicleId: null,
-      );
-
-      // Prasyarat: v2 berstatus softBooked
-      final sV2 = sourceClass.firstWhere((v) => v.vehicleId == 'v2');
-      expect(sV2.category, equals(VehicleCategory.softBooked));
-
-      // Follow-up: status jadwal b1 yang sama diubah menjadi ON_GOING (tanpa menambah jadwal baru)
-      final followUpBookings = [
-        BookingSlot(id: 'b1', vehicleId: 'v2', status: 'ON_GOING', start: baseTime, end: end)
-      ];
-      final followUpClass = BookingLogic.classifyVehicles(
-        vehicleIds: vehicles, bookings: followUpBookings,
-        currentBookingId: currentBookingId, currentVehicleId: null,
-      );
-
-      final fV2 = followUpClass.firstWhere((v) => v.vehicleId == 'v2');
-      expect(fV2.category, equals(VehicleCategory.hardUnavailable));
-    });
-
   });
 }

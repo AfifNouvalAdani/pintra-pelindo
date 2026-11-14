@@ -447,35 +447,38 @@ Future<void> _checkExistingBookings() async {
           ])
           .get();
 
-      // 3. Filter kendaraan yang BENTROK WAKTU
-      Set<String> unavailableVehicleIds = {};
-      
+      // 3. Ubah booking aktif menjadi BookingSlot
+      final bookingSlots = <BookingSlot>[];
       for (var bookingDoc in activeBookingsSnapshot.docs) {
         final booking = bookingDoc.data();
-        final bookingStart = (booking['waktuPinjam'] as Timestamp).toDate();
-        final bookingEnd = (booking['waktuKembali'] as Timestamp).toDate();
         final vehicleId = booking['vehicleId'] as String?;
-
-        if (vehicleId == null) continue;
-
-        // Cek apakah ada bentrok waktu
-        // Bentrok jika: (waktu_baru_mulai < waktu_lama_selesai) DAN (waktu_baru_selesai > waktu_lama_mulai)
-        bool isBentrok = BookingLogic.isTimeConflict(waktuPinjam, waktuKembali, bookingStart, bookingEnd);
-
-        if (isBentrok) {
-          unavailableVehicleIds.add(vehicleId);
-          print('⚠️ Kendaraan $vehicleId bentrok waktu!');
-          print('   Booking lama: ${DateFormat('dd/MM HH:mm').format(bookingStart)} - ${DateFormat('dd/MM HH:mm').format(bookingEnd)}');
-          print('   Booking baru: ${DateFormat('dd/MM HH:mm').format(waktuPinjam)} - ${DateFormat('dd/MM HH:mm').format(waktuKembali)}');
-        }
+        final rawStart = booking['waktuPinjam'];
+        final rawEnd = booking['waktuKembali'];
+        if (vehicleId == null || rawStart is! Timestamp || rawEnd is! Timestamp) continue;
+        bookingSlots.add(BookingSlot(
+          id: bookingDoc.id,
+          vehicleId: vehicleId,
+          status: (booking['status'] as String?) ?? '',
+          start: rawStart.toDate(),
+          end: rawEnd.toDate(),
+        ));
       }
 
-      print('🚗 Total kendaraan aktif: ${vehiclesSnapshot.docs.length}');
-      print('🔴 Kendaraan tidak tersedia (bentrok waktu): ${unavailableVehicleIds.length}');
+      // 4. Kendaraan yang bebas bentrok waktu & status pemblokiran
+      //    ditentukan oleh BookingLogic.availableVehicleIds (fungsi murni)
+      final availableIds = BookingLogic.availableVehicleIds(
+        vehiclesSnapshot.docs.map((doc) => doc.id).toList(),
+        bookingSlots,
+        waktuPinjam,
+        waktuKembali,
+      ).toSet();
 
-      // 4. Filter kendaraan yang TIDAK bentrok
+      print('🚗 Total kendaraan aktif: ${vehiclesSnapshot.docs.length}');
+      print('🔴 Kendaraan tidak tersedia (bentrok waktu): ${vehiclesSnapshot.docs.length - availableIds.length}');
+
+      // 5. Filter kendaraan yang TIDAK bentrok
       final availableVehicles = vehiclesSnapshot.docs
-          .where((doc) => !unavailableVehicleIds.contains(doc.id))
+          .where((doc) => availableIds.contains(doc.id))
           .map((doc) {
         final data = doc.data();
         return {
