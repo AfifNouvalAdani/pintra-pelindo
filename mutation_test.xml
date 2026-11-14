@@ -130,6 +130,14 @@
     <literal text="continue;" id="ekspresi.hapus_continue">
       <mutation text=";"/>
     </literal>
+    <!-- Penggantian operand (variable replacement): atribut diambil dari
+         entitas yang salah, a.x menjadi b.x dan sebaliknya (swapVehicles) -->
+    <regex pattern="(\w+): a\.(\w+)" id="ekspresi.ganti_operand_a_ke_b">
+      <mutation text="$1: b.$2"/>
+    </regex>
+    <regex pattern="(\w+): b\.(\w+)" id="ekspresi.ganti_operand_b_ke_a">
+      <mutation text="$1: a.$2"/>
+    </regex>
     <!-- Pembalikan urutan pembanding pada sort -->
     <literal text="(a, b) =>" id="ekspresi.balik_komparator">
       <mutation text="(b, a) =>"/>

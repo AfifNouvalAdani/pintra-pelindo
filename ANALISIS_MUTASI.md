@@ -34,20 +34,20 @@ Operator mutasi (dikelompokkan sesuai Bab 3.2.11):
 | Logika | `logika.and_ke_or`, `logika.or_ke_and`, `logika.negasi_if`, `logika.negasi_if_continue`, `logika.negasi_operand_or`, `logika.hapus_negasi` | `&&` → `\|\|`, `if (c)` → `if (!(c))`, `!x.contains()` → `x.contains()` |
 | Relasional | `relasional.eq_ke_neq`, `relasional.neq_ke_eq`, `relasional.before_ke_after`, `relasional.after_ke_before`, `relasional.before_ke_before_eq`, `relasional.after_ke_after_eq` | `==` → `!=`, `a.isBefore(b)` (a<b) → `!a.isAfter(b)` (a≤b) |
 | Aritmatika | `aritmatika.tambah_ke_kurang`, `aritmatika.kurang_ke_tambah`, `aritmatika.kali_ke_bagi`, `aritmatika.bagi_ke_kali`, `aritmatika.subtract_ke_add`, `aritmatika.konstanta_durasi` | `/` → `*`, `.subtract(` → `.add(`, `Duration(hours: 1)` → `0` / `2` |
-| Ekspresi/pemanggilan | `ekspresi.hapus_pemanggilan1/2`, `ekspresi.hapus_continue`, `ekspresi.balik_komparator`, `ekspresi.status_*` | hapus `blocked.add(...)`, `'ON_GOING'` → `'APPROVAL_3'` |
+| Ekspresi/pemanggilan | `ekspresi.hapus_pemanggilan1/2`, `ekspresi.hapus_continue`, `ekspresi.balik_komparator`, `ekspresi.status_*`, `ekspresi.ganti_operand_a_ke_b`, `ekspresi.ganti_operand_b_ke_a` | hapus `blocked.add(...)`, `'ON_GOING'` → `'APPROVAL_3'`, `status: a.status` → `status: b.status` |
 
 ## 2. Hasil
 
 | Status | Jumlah |
 |---|---|
-| Total mutant | 62 |
-| Killed | 46 |
+| Total mutant | 72 |
+| Killed | 56 |
 | Survived | 16 |
 | Equivalent | 0 |
 | Timeout | 0 |
 | Stillborn (gagal compile) | 0 (lihat catatan validitas) |
 
-**Mutation score = Killed / (Total − Equivalent) × 100% = 46 / (62 − 0) × 100% = 74,19%**
+**Mutation score = Killed / (Total − Equivalent) × 100% = 56 / (72 − 0) × 100% = 77,78%**
 
 Mutation score per fungsi:
 
@@ -57,7 +57,7 @@ Mutation score per fungsi:
 | calculateCompleteness | 2 | 2 | 100% |
 | availableVehicleIds | 7 | 8 | 87,5% |
 | classifyVehicles | 14 | 17 | 82,4% |
-| swapVehicles | 0 | 0 | – (tidak ada konstruksi yang cocok dengan operator) |
+| swapVehicles | 10 | 10 | 100% |
 | approveTransition | 19 | 25 | 76,0% |
 | isFormAvailable | 0 | 5 | 0% |
 
@@ -101,7 +101,11 @@ Ringkasan penyebab:
    - `isTimeConflict`, `availableVehicleIds`: `vehicle_booking_form_page.dart`
    - `classifyVehicles`, `swapVehicles`, `approveTransition`, `isFormAvailable`, `isTimeConflict`: `detail_peminjaman_page.dart`
    - `calculateCompleteness`: `form_kondisi_kendaraan_awal_page.dart`, `form_pengembalian_kendaraan_page.dart`
-4. **Determinisme.** Setiap MR memakai `Random(seed)` sendiri, sehingga data uji identik di setiap eksekusi dan tidak bergantung pada urutan test.
+4. **Semua MR ikut dievaluasi.** Pada run sebelumnya `swapVehicles` tidak menghasilkan mutan, sehingga MR-7
+   tidak terukur. Operator penggantian operand (`ekspresi.ganti_operand_*`) ditambahkan dan menghasilkan
+   10 mutan pada `swapVehicles`. Kesepuluhnya killed oleh MR-7, karena relasi involusi memeriksa
+   seluruh atribut dokumen (id, kendaraan, status, waktu).
+5. **Determinisme.** Setiap MR memakai `Random(seed)` sendiri, sehingga data uji identik di setiap eksekusi dan tidak bergantung pada urutan test.
 
 ## 5. Eksekusi MT pada program asli
 

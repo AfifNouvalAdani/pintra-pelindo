@@ -1,12 +1,12 @@
 <?xml version="1.0"?>
 <testsuites>
-  <testsuite id="0" name="logika.and_ke_or" package="logika.and_ke_or" tests="2" failures="1" errors="0" time="21.011" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="0" name="logika.and_ke_or" package="logika.and_ke_or" tests="2" failures="1" errors="0" time="17.276" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line167_logika.and_ke_or_0" classname="lib/utils/booking_logic.dart" time="10.538"/>
-    <testcase name="Line36_logika.and_ke_or_0" classname="lib/utils/booking_logic.dart" time="10.472">
+    <testcase name="Line167_logika.and_ke_or_0" classname="lib/utils/booking_logic.dart" time="8.451"/>
+    <testcase name="Line36_logika.and_ke_or_0" classname="lib/utils/booking_logic.dart" time="8.824">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 36
@@ -17,29 +17,29 @@ Mutation:     return newStart.isBefore(existingEnd) || newEnd.isAfter(existingSt
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="1" name="logika.or_ke_and" package="logika.or_ke_and" tests="1" failures="0" errors="0" time="10.288" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="1" name="logika.or_ke_and" package="logika.or_ke_and" tests="1" failures="0" errors="0" time="8.93" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line183_logika.or_ke_and_0" classname="lib/utils/booking_logic.dart" time="10.288"/>
+    <testcase name="Line183_logika.or_ke_and_0" classname="lib/utils/booking_logic.dart" time="8.93"/>
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="2" name="relasional.eq_ke_neq" package="relasional.eq_ke_neq" tests="9" failures="1" errors="0" time="91.224" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="2" name="relasional.eq_ke_neq" package="relasional.eq_ke_neq" tests="9" failures="1" errors="0" time="77.006" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line57_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="10.27"/>
-    <testcase name="Line120_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="10.102"/>
-    <testcase name="Line121_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="10.18"/>
-    <testcase name="Line130_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="10.093"/>
-    <testcase name="Line167_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="9.984"/>
-    <testcase name="Line172_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="10.072000000000001"/>
-    <testcase name="Line173_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="10.203"/>
-    <testcase name="Line183_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="10.278"/>
-    <testcase name="Line183_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="10.039">
+    <testcase name="Line57_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="8.445"/>
+    <testcase name="Line120_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="8.747"/>
+    <testcase name="Line121_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="8.399000000000001"/>
+    <testcase name="Line130_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="8.685"/>
+    <testcase name="Line167_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="8.466"/>
+    <testcase name="Line172_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="8.789"/>
+    <testcase name="Line173_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="8.497"/>
+    <testcase name="Line183_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="8.753"/>
+    <testcase name="Line183_relasional.eq_ke_neq_0" classname="lib/utils/booking_logic.dart" time="8.221">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 183
@@ -50,14 +50,14 @@ Mutation:     } else if (role == 'admin' || role != 'manager_umum') {
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="3" name="relasional.neq_ke_eq" package="relasional.neq_ke_eq" tests="3" failures="1" errors="0" time="30.667" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="3" name="relasional.neq_ke_eq" package="relasional.neq_ke_eq" tests="3" failures="1" errors="0" time="24.735" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line176_relasional.neq_ke_eq_0" classname="lib/utils/booking_logic.dart" time="10.192"/>
-    <testcase name="Line184_relasional.neq_ke_eq_0" classname="lib/utils/booking_logic.dart" time="10.263"/>
-    <testcase name="Line168_relasional.neq_ke_eq_0" classname="lib/utils/booking_logic.dart" time="10.211">
+    <testcase name="Line176_relasional.neq_ke_eq_0" classname="lib/utils/booking_logic.dart" time="8.248"/>
+    <testcase name="Line184_relasional.neq_ke_eq_0" classname="lib/utils/booking_logic.dart" time="8.216"/>
+    <testcase name="Line168_relasional.neq_ke_eq_0" classname="lib/utils/booking_logic.dart" time="8.27">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 168
@@ -68,22 +68,22 @@ Mutation:       if (currentStatus == 'SUBMITTED') {
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="4" name="relasional.before_ke_after" package="relasional.before_ke_after" tests="1" failures="0" errors="0" time="10.176" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="4" name="relasional.before_ke_after" package="relasional.before_ke_after" tests="1" failures="0" errors="0" time="8.329" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line36_relasional.before_ke_after_0" classname="lib/utils/booking_logic.dart" time="10.176"/>
+    <testcase name="Line36_relasional.before_ke_after_0" classname="lib/utils/booking_logic.dart" time="8.329"/>
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="5" name="relasional.after_ke_before" package="relasional.after_ke_before" tests="2" failures="1" errors="0" time="20.428" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="5" name="relasional.after_ke_before" package="relasional.after_ke_before" tests="2" failures="1" errors="0" time="16.755" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line36_relasional.after_ke_before_0" classname="lib/utils/booking_logic.dart" time="10.225"/>
-    <testcase name="Line193_relasional.after_ke_before_0" classname="lib/utils/booking_logic.dart" time="10.202">
+    <testcase name="Line36_relasional.after_ke_before_0" classname="lib/utils/booking_logic.dart" time="8.515"/>
+    <testcase name="Line193_relasional.after_ke_before_0" classname="lib/utils/booking_logic.dart" time="8.24">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 193
@@ -94,12 +94,12 @@ Mutation:     return now.isBefore(waktuPinjam.subtract(const Duration(hours: 1))
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="6" name="aritmatika.subtract_ke_add" package="aritmatika.subtract_ke_add" tests="1" failures="1" errors="0" time="10.059000000000001" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="6" name="aritmatika.subtract_ke_add" package="aritmatika.subtract_ke_add" tests="1" failures="1" errors="0" time="8.157" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line193_aritmatika.subtract_ke_add_0" classname="lib/utils/booking_logic.dart" time="10.059000000000001">
+    <testcase name="Line193_aritmatika.subtract_ke_add_0" classname="lib/utils/booking_logic.dart" time="8.157">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 193
@@ -110,12 +110,12 @@ Mutation:     return now.isAfter(waktuPinjam.add(const Duration(hours: 1)));
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="7" name="aritmatika.konstanta_durasi" package="aritmatika.konstanta_durasi" tests="2" failures="2" errors="0" time="20.524" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="7" name="aritmatika.konstanta_durasi" package="aritmatika.konstanta_durasi" tests="2" failures="2" errors="0" time="16.271" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line193_aritmatika.konstanta_durasi_0" classname="lib/utils/booking_logic.dart" time="10.307">
+    <testcase name="Line193_aritmatika.konstanta_durasi_0" classname="lib/utils/booking_logic.dart" time="8.078">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 193
@@ -123,7 +123,7 @@ Original line:     return now.isAfter(waktuPinjam.subtract(const Duration(hours:
 Mutation:     return now.isAfter(waktuPinjam.subtract(const Duration(hours: 0)));
 </failure>
     </testcase>
-    <testcase name="Line193_aritmatika.konstanta_durasi_1" classname="lib/utils/booking_logic.dart" time="10.216000000000001">
+    <testcase name="Line193_aritmatika.konstanta_durasi_1" classname="lib/utils/booking_logic.dart" time="8.192">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 193
@@ -134,13 +134,13 @@ Mutation:     return now.isAfter(waktuPinjam.subtract(const Duration(hours: 2)))
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="8" name="ekspresi.hapus_continue" package="ekspresi.hapus_continue" tests="2" failures="1" errors="0" time="20.392" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="8" name="ekspresi.hapus_continue" package="ekspresi.hapus_continue" tests="2" failures="1" errors="0" time="16.419" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line102_ekspresi.hapus_continue_0" classname="lib/utils/booking_logic.dart" time="10.283"/>
-    <testcase name="Line120_ekspresi.hapus_continue_0" classname="lib/utils/booking_logic.dart" time="10.108">
+    <testcase name="Line102_ekspresi.hapus_continue_0" classname="lib/utils/booking_logic.dart" time="8.227"/>
+    <testcase name="Line120_ekspresi.hapus_continue_0" classname="lib/utils/booking_logic.dart" time="8.192">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 120
@@ -151,12 +151,12 @@ Mutation:       if (b.id == currentBookingId) ;
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="9" name="ekspresi.balik_komparator" package="ekspresi.balik_komparator" tests="1" failures="1" errors="0" time="10.057" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="9" name="ekspresi.balik_komparator" package="ekspresi.balik_komparator" tests="1" failures="1" errors="0" time="8.166" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line149_ekspresi.balik_komparator_0" classname="lib/utils/booking_logic.dart" time="10.057">
+    <testcase name="Line149_ekspresi.balik_komparator_0" classname="lib/utils/booking_logic.dart" time="8.166">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 149
@@ -167,13 +167,13 @@ Mutation:     result.sort((b, a) => rank(a.category).compareTo(rank(b.category))
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="10" name="ekspresi.status_submitted" package="ekspresi.status_submitted" tests="2" failures="1" errors="0" time="20.173000000000002" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="10" name="ekspresi.status_submitted" package="ekspresi.status_submitted" tests="2" failures="1" errors="0" time="16.324" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line123_ekspresi.status_submitted_0" classname="lib/utils/booking_logic.dart" time="10.172"/>
-    <testcase name="Line168_ekspresi.status_submitted_0" classname="lib/utils/booking_logic.dart" time="10.001">
+    <testcase name="Line123_ekspresi.status_submitted_0" classname="lib/utils/booking_logic.dart" time="8.206"/>
+    <testcase name="Line168_ekspresi.status_submitted_0" classname="lib/utils/booking_logic.dart" time="8.118">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 168
@@ -184,14 +184,14 @@ Mutation:       if (currentStatus != 'APPROVAL_1') {
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="11" name="ekspresi.status_approval1" package="ekspresi.status_approval1" tests="3" failures="1" errors="0" time="29.918" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="11" name="ekspresi.status_approval1" package="ekspresi.status_approval1" tests="3" failures="1" errors="0" time="24.596" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line123_ekspresi.status_approval1_0" classname="lib/utils/booking_logic.dart" time="10.026"/>
-    <testcase name="Line176_ekspresi.status_approval1_0" classname="lib/utils/booking_logic.dart" time="10.024000000000001"/>
-    <testcase name="Line171_ekspresi.status_approval1_0" classname="lib/utils/booking_logic.dart" time="9.867">
+    <testcase name="Line123_ekspresi.status_approval1_0" classname="lib/utils/booking_logic.dart" time="8.262"/>
+    <testcase name="Line176_ekspresi.status_approval1_0" classname="lib/utils/booking_logic.dart" time="8.194"/>
+    <testcase name="Line171_ekspresi.status_approval1_0" classname="lib/utils/booking_logic.dart" time="8.139">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 171
@@ -202,15 +202,15 @@ Mutation:       return const ApprovalResult.ok('APPROVAL_2');
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="12" name="ekspresi.status_approval2" package="ekspresi.status_approval2" tests="4" failures="1" errors="0" time="40.509" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="12" name="ekspresi.status_approval2" package="ekspresi.status_approval2" tests="4" failures="1" errors="0" time="32.974000000000004" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line123_ekspresi.status_approval2_0" classname="lib/utils/booking_logic.dart" time="10.132"/>
-    <testcase name="Line182_ekspresi.status_approval2_0" classname="lib/utils/booking_logic.dart" time="10.224"/>
-    <testcase name="Line184_ekspresi.status_approval2_0" classname="lib/utils/booking_logic.dart" time="10.036"/>
-    <testcase name="Line92_ekspresi.status_approval2_0" classname="lib/utils/booking_logic.dart" time="10.115">
+    <testcase name="Line123_ekspresi.status_approval2_0" classname="lib/utils/booking_logic.dart" time="8.204"/>
+    <testcase name="Line182_ekspresi.status_approval2_0" classname="lib/utils/booking_logic.dart" time="8.214"/>
+    <testcase name="Line184_ekspresi.status_approval2_0" classname="lib/utils/booking_logic.dart" time="8.235"/>
+    <testcase name="Line92_ekspresi.status_approval2_0" classname="lib/utils/booking_logic.dart" time="8.319">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 92
@@ -221,35 +221,35 @@ Mutation:   static const List&lt;String> blockingStatuses = ['APPROVAL_3', 'APPR
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="13" name="ekspresi.status_ongoing" package="ekspresi.status_ongoing" tests="2" failures="0" errors="0" time="20.343" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="13" name="ekspresi.status_ongoing" package="ekspresi.status_ongoing" tests="2" failures="0" errors="0" time="16.655" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line92_ekspresi.status_ongoing_0" classname="lib/utils/booking_logic.dart" time="10.18"/>
-    <testcase name="Line121_ekspresi.status_ongoing_0" classname="lib/utils/booking_logic.dart" time="10.163"/>
+    <testcase name="Line92_ekspresi.status_ongoing_0" classname="lib/utils/booking_logic.dart" time="8.45"/>
+    <testcase name="Line121_ekspresi.status_ongoing_0" classname="lib/utils/booking_logic.dart" time="8.205"/>
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="14" name="logika.negasi_if" package="logika.negasi_if" tests="14" failures="1" errors="0" time="140.798" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="14" name="logika.negasi_if" package="logika.negasi_if" tests="14" failures="1" errors="0" time="116.51" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line103_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="10.196"/>
-    <testcase name="Line121_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="10.254"/>
-    <testcase name="Line123_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="10.896"/>
-    <testcase name="Line130_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="10.609"/>
-    <testcase name="Line132_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="9.89"/>
-    <testcase name="Line134_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="9.827"/>
-    <testcase name="Line167_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="9.987"/>
-    <testcase name="Line172_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="9.933"/>
-    <testcase name="Line173_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="10.08"/>
-    <testcase name="Line176_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="9.878"/>
-    <testcase name="Line179_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="9.877"/>
-    <testcase name="Line183_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="9.867"/>
-    <testcase name="Line184_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="9.812"/>
-    <testcase name="Line168_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="9.686">
+    <testcase name="Line103_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="8.322000000000001"/>
+    <testcase name="Line121_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="8.384"/>
+    <testcase name="Line123_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="8.439"/>
+    <testcase name="Line130_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="8.276"/>
+    <testcase name="Line132_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="8.244"/>
+    <testcase name="Line134_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="8.336"/>
+    <testcase name="Line167_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="8.478"/>
+    <testcase name="Line172_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="8.288"/>
+    <testcase name="Line173_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="8.224"/>
+    <testcase name="Line176_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="8.455"/>
+    <testcase name="Line179_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="8.292"/>
+    <testcase name="Line183_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="8.424"/>
+    <testcase name="Line184_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="8.255"/>
+    <testcase name="Line168_logika.negasi_if_0" classname="lib/utils/booking_logic.dart" time="8.083">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 168
@@ -260,23 +260,23 @@ Mutation:       if (!(currentStatus != 'SUBMITTED')) {
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="15" name="logika.negasi_if_continue" package="logika.negasi_if_continue" tests="2" failures="0" errors="0" time="19.635" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="15" name="logika.negasi_if_continue" package="logika.negasi_if_continue" tests="2" failures="0" errors="0" time="16.73" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line102_logika.negasi_if_continue_0" classname="lib/utils/booking_logic.dart" time="9.698"/>
-    <testcase name="Line120_logika.negasi_if_continue_0" classname="lib/utils/booking_logic.dart" time="9.937"/>
+    <testcase name="Line102_logika.negasi_if_continue_0" classname="lib/utils/booking_logic.dart" time="8.256"/>
+    <testcase name="Line120_logika.negasi_if_continue_0" classname="lib/utils/booking_logic.dart" time="8.473"/>
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="16" name="logika.negasi_operand_or" package="logika.negasi_operand_or" tests="2" failures="1" errors="0" time="19.655" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="16" name="logika.negasi_operand_or" package="logika.negasi_operand_or" tests="2" failures="1" errors="0" time="16.661" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line183_logika.negasi_operand_or_0" classname="lib/utils/booking_logic.dart" time="9.998"/>
-    <testcase name="Line183_logika.negasi_operand_or_1" classname="lib/utils/booking_logic.dart" time="9.656">
+    <testcase name="Line183_logika.negasi_operand_or_0" classname="lib/utils/booking_logic.dart" time="8.496"/>
+    <testcase name="Line183_logika.negasi_operand_or_1" classname="lib/utils/booking_logic.dart" time="8.164">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 183
@@ -287,32 +287,32 @@ Mutation:     } else if (role == 'admin' ||!( role == 'manager_umum')) {
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="17" name="logika.hapus_negasi" package="logika.hapus_negasi" tests="2" failures="0" errors="0" time="19.632" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="17" name="logika.hapus_negasi" package="logika.hapus_negasi" tests="2" failures="0" errors="0" time="16.539" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line102_logika.hapus_negasi_0" classname="lib/utils/booking_logic.dart" time="9.762"/>
-    <testcase name="Line107_logika.hapus_negasi_0" classname="lib/utils/booking_logic.dart" time="9.869"/>
+    <testcase name="Line102_logika.hapus_negasi_0" classname="lib/utils/booking_logic.dart" time="8.226"/>
+    <testcase name="Line107_logika.hapus_negasi_0" classname="lib/utils/booking_logic.dart" time="8.312"/>
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="18" name="relasional.before_ke_before_eq" package="relasional.before_ke_before_eq" tests="1" failures="0" errors="0" time="10.002" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="18" name="relasional.before_ke_before_eq" package="relasional.before_ke_before_eq" tests="1" failures="0" errors="0" time="8.133000000000001" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line36_relasional.before_ke_before_eq_0" classname="lib/utils/booking_logic.dart" time="10.002"/>
+    <testcase name="Line36_relasional.before_ke_before_eq_0" classname="lib/utils/booking_logic.dart" time="8.133000000000001"/>
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="19" name="relasional.after_ke_after_eq" package="relasional.after_ke_after_eq" tests="2" failures="1" errors="0" time="19.934" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="19" name="relasional.after_ke_after_eq" package="relasional.after_ke_after_eq" tests="2" failures="1" errors="0" time="16.413" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line36_relasional.after_ke_after_eq_0" classname="lib/utils/booking_logic.dart" time="10.157"/>
-    <testcase name="Line193_relasional.after_ke_after_eq_0" classname="lib/utils/booking_logic.dart" time="9.777000000000001">
+    <testcase name="Line36_relasional.after_ke_after_eq_0" classname="lib/utils/booking_logic.dart" time="8.221"/>
+    <testcase name="Line193_relasional.after_ke_after_eq_0" classname="lib/utils/booking_logic.dart" time="8.191">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 193
@@ -323,31 +323,31 @@ Mutation:     return !now.isBefore(waktuPinjam.subtract(const Duration(hours: 1)
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="23" name="aritmatika.bagi_ke_kali" package="aritmatika.bagi_ke_kali" tests="1" failures="0" errors="0" time="8.406" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="23" name="aritmatika.bagi_ke_kali" package="aritmatika.bagi_ke_kali" tests="1" failures="0" errors="0" time="7.078" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line58_aritmatika.bagi_ke_kali_0" classname="lib/utils/booking_logic.dart" time="8.406"/>
+    <testcase name="Line58_aritmatika.bagi_ke_kali_0" classname="lib/utils/booking_logic.dart" time="7.078"/>
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="24" name="ekspresi.hapus_pemanggilan1" package="ekspresi.hapus_pemanggilan1" tests="2" failures="0" errors="0" time="19.926000000000002" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="24" name="ekspresi.hapus_pemanggilan1" package="ekspresi.hapus_pemanggilan1" tests="2" failures="0" errors="0" time="16.541" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line103_ekspresi.hapus_pemanggilan1_0" classname="lib/utils/booking_logic.dart" time="9.84"/>
-    <testcase name="Line121_ekspresi.hapus_pemanggilan1_0" classname="lib/utils/booking_logic.dart" time="10.085"/>
+    <testcase name="Line103_ekspresi.hapus_pemanggilan1_0" classname="lib/utils/booking_logic.dart" time="8.338000000000001"/>
+    <testcase name="Line121_ekspresi.hapus_pemanggilan1_0" classname="lib/utils/booking_logic.dart" time="8.202"/>
     <system-out/>
     <system-err/>
   </testsuite>
-  <testsuite id="25" name="ekspresi.hapus_pemanggilan2" package="ekspresi.hapus_pemanggilan2" tests="1" failures="1" errors="0" time="10.231" timestamp="2026-11-14T14:55:37" hostname="LAPTOP-1TG478AJ">
+  <testsuite id="25" name="ekspresi.hapus_pemanggilan2" package="ekspresi.hapus_pemanggilan2" tests="1" failures="1" errors="0" time="8.267" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
     <properties>
       <property name="test_runner" value="mutation_test"/>
       <property name="version" value="mutation-test version: 1.8.0"/>
     </properties>
-    <testcase name="Line147_ekspresi.hapus_pemanggilan2_0" classname="lib/utils/booking_logic.dart" time="10.231">
+    <testcase name="Line147_ekspresi.hapus_pemanggilan2_0" classname="lib/utils/booking_logic.dart" time="8.267">
       <failure type="undetected" message="All tests passed despite changing the code!">
 File: lib/utils/booking_logic.dart
 Line: 147
@@ -359,6 +359,32 @@ Mutation:     }
     
 </failure>
     </testcase>
+    <system-out/>
+    <system-err/>
+  </testsuite>
+  <testsuite id="26" name="ekspresi.ganti_operand_a_ke_b" package="ekspresi.ganti_operand_a_ke_b" tests="5" failures="0" errors="0" time="41.629" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
+    <properties>
+      <property name="test_runner" value="mutation_test"/>
+      <property name="version" value="mutation-test version: 1.8.0"/>
+    </properties>
+    <testcase name="Line154_ekspresi.ganti_operand_a_ke_b_0" classname="lib/utils/booking_logic.dart" time="8.337"/>
+    <testcase name="Line154_ekspresi.ganti_operand_a_ke_b_0" classname="lib/utils/booking_logic.dart" time="8.308"/>
+    <testcase name="Line154_ekspresi.ganti_operand_a_ke_b_0" classname="lib/utils/booking_logic.dart" time="8.307"/>
+    <testcase name="Line154_ekspresi.ganti_operand_a_ke_b_0" classname="lib/utils/booking_logic.dart" time="8.307"/>
+    <testcase name="Line155_ekspresi.ganti_operand_a_ke_b_0" classname="lib/utils/booking_logic.dart" time="8.367"/>
+    <system-out/>
+    <system-err/>
+  </testsuite>
+  <testsuite id="27" name="ekspresi.ganti_operand_b_ke_a" package="ekspresi.ganti_operand_b_ke_a" tests="5" failures="0" errors="0" time="41.473" timestamp="2026-11-14T15:15:32" hostname="LAPTOP-1TG478AJ">
+    <properties>
+      <property name="test_runner" value="mutation_test"/>
+      <property name="version" value="mutation-test version: 1.8.0"/>
+    </properties>
+    <testcase name="Line154_ekspresi.ganti_operand_b_ke_a_0" classname="lib/utils/booking_logic.dart" time="8.441"/>
+    <testcase name="Line155_ekspresi.ganti_operand_b_ke_a_0" classname="lib/utils/booking_logic.dart" time="8.314"/>
+    <testcase name="Line155_ekspresi.ganti_operand_b_ke_a_0" classname="lib/utils/booking_logic.dart" time="8.273"/>
+    <testcase name="Line155_ekspresi.ganti_operand_b_ke_a_0" classname="lib/utils/booking_logic.dart" time="8.201"/>
+    <testcase name="Line155_ekspresi.ganti_operand_b_ke_a_0" classname="lib/utils/booking_logic.dart" time="8.241"/>
     <system-out/>
     <system-err/>
   </testsuite>
