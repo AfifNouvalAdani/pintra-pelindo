@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mutations version="1.0">
+  <!-- Direktori dan file yang akan dimutasi -->
+  <files>
+    <file>lib/utils/booking_logic.dart</file>
+  </files>
+
+  <!-- Direktori untuk menyimpan laporan HTML -->
+  <directories>
+    <report>mutation_reports</report>
+  </directories>
+
+  <!-- Perintah untuk menjalankan test -->
+  <command>flutter test test/booking_logic_mt_test.dart</command>
+
+  <!-- Aturan Mutasi Dasar -->
+  <rules>
+    <!-- Ubah operator logika -->
+    <rule>
+      <replacement>
+        <match>&amp;&amp;</match>
+        <replace>||</replace>
+      </replacement>
+    </rule>
+    <rule>
+      <replacement>
+        <match>||</match>
+        <replace>&amp;&amp;</replace>
+      </replacement>
+    </rule>
+    
+    <!-- Ubah operator perbandingan -->
+    <rule>
+      <replacement>
+        <match>==</match>
+        <replace>!=</replace>
+      </replacement>
+    </rule>
+    <rule>
+      <replacement>
+        <match>!=</match>
+        <replace>==</replace>
+      </replacement>
+    </rule>
+    <rule>
+      <replacement>
+        <match>&lt;</match>
+        <replace>&lt;=</replace>
+      </replacement>
+    </rule>
+    <rule>
+      <replacement>
+        <match>&gt;</match>
+        <replace>&gt;=</replace>
+      </replacement>
+    </rule>
+
+    <!-- Ubah nilai return statis (bool) -->
+    <rule>
+      <replacement>
+        <match>return true;</match>
+        <replace>return false;</replace>
+      </replacement>
+    </rule>
+    <rule>
+      <replacement>
+        <match>return false;</match>
+        <replace>return true;</replace>
+      </replacement>
+    </rule>
+  </rules>
+</mutations>

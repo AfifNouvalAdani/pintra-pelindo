@@ -360,11 +360,11 @@ td.barBg
 
      <tr>
      <td class="ItemLabel" width="10%">Date:</td>
-     <td class="ItemText" width="35%">2026-08-30 17:52:00.793795</td>
+     <td class="ItemText" width="35%">2026-10-06 22:48:29.085044</td>
      <td class="ItemLabel" width="10%">Mutations:</td>
-     <td class="ItemReport" width="15%">26</td>
-     <td class="ItemReport" width="15%">26</td>
-     <td class="ItemReportHigh" width="15%">100.0 %</td>
+     <td class="ItemReport" width="15%">71</td>
+     <td class="ItemReport" width="15%">75</td>
+     <td class="ItemReportHigh" width="15%">94.7 %</td>
      </tr>
      
      <tr>
@@ -372,7 +372,7 @@ td.barBg
      <td class="ItemText" width="35%">true</td>
      <td class="ItemLabel" width="10%">Blocked:</td>
      <td class="ItemReport" width="15%">0</td>
-     <td class="ItemReport" width="15%">26</td>
+     <td class="ItemReport" width="15%">75</td>
      <td class="ItemReportHigh" width="15%">0.0 %</td>
      </tr>
      </tbody>
@@ -387,51 +387,87 @@ td.barBg
 
 <pre class="fileHeader">          Source code</pre>
 <pre class="fileContents">
-<a name="1"><span class="lineNumber">       1 </span>class BookingLogic {</a>
-<a name="2"><span class="lineNumber">       2 </span>  </a>
-<a name="3"><span class="lineNumber">       3 </span>  // 1. Logika untuk mengecek bentrok waktu (Conflict Detection)</a>
-<a name="4"><span class="lineNumber">       4 </span>  static bool isTimeConflict(DateTime newStart, DateTime newEnd, DateTime existingStart, DateTime existingEnd) {</a>
-<a name="5"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">       5 </span>    return newStart.isBefore(existingEnd) &amp;&amp; newEnd.isAfter(existingStart);</pre></button>
+<a name="1"><span class="lineNumber">       1 </span>class BookingSlot {</a>
+<a name="2"><span class="lineNumber">       2 </span>  final String id;</a>
+<a name="3"><span class="lineNumber">       3 </span>  final String vehicleId;</a>
+<a name="4"><span class="lineNumber">       4 </span>  final String status;</a>
+<a name="5"><span class="lineNumber">       5 </span>  final DateTime start;</a>
+<a name="6"><span class="lineNumber">       6 </span>  final DateTime end;</a>
+<a name="7"><span class="lineNumber">       7 </span></a>
+<a name="8"><span class="lineNumber">       8 </span>  const BookingSlot({</a>
+<a name="9"><span class="lineNumber">       9 </span>    required this.id,</a>
+<a name="10"><span class="lineNumber">      10 </span>    required this.vehicleId,</a>
+<a name="11"><span class="lineNumber">      11 </span>    required this.status,</a>
+<a name="12"><span class="lineNumber">      12 </span>    required this.start,</a>
+<a name="13"><span class="lineNumber">      13 </span>    required this.end,</a>
+<a name="14"><span class="lineNumber">      14 </span>  });</a>
+<a name="15"><span class="lineNumber">      15 </span>}</a>
+<a name="16"><span class="lineNumber">      16 </span></a>
+<a name="17"><span class="lineNumber">      17 </span>enum VehicleCategory { current, free, softBooked, hardUnavailable }</a>
+<a name="18"><span class="lineNumber">      18 </span></a>
+<a name="19"><span class="lineNumber">      19 </span>class VehicleClass {</a>
+<a name="20"><span class="lineNumber">      20 </span>  final String vehicleId;</a>
+<a name="21"><span class="lineNumber">      21 </span>  final VehicleCategory category;</a>
+<a name="22"><span class="lineNumber">      22 </span>  final String? otherBookingId;</a>
+<a name="23"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      23 </span>  const VehicleClass(this.vehicleId, this.category, this.otherBookingId);</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+   const<span class="changedTokens"> VehicleClass(this.vehicleId, this.otherBookingId, this.category);</span></span></td><td class="match">RegExp: pattern=([\s][a-zA-Z]+?[^\(;\s{}]*?)\s*\(([^,:;{}(]+?),([^,:;{}(]+?),([^,:;{}(]+?)\)\s*; flags=m<span class="tooltip">Id: builtin.function.arg3</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+   const<span class="changedTokens"> VehicleClass( this.category,this.vehicleId, this.otherBookingId);</span></span></td><td class="match">RegExp: pattern=([\s][a-zA-Z]+?[^\(;\s{}]*?)\s*\(([^,:;{}(]+?),([^,:;{}(]+?),([^,:;{}(]+?)\)\s*; flags=m<span class="tooltip">Id: builtin.function.arg3</span></td></tr></table>
+
+</div></a><a name="24"><span class="lineNumber">      24 </span>}</a>
+<a name="25"><span class="lineNumber">      25 </span></a>
+<a name="26"><span class="lineNumber">      26 </span>class ApprovalResult {</a>
+<a name="27"><span class="lineNumber">      27 </span>  final String? newStatus;</a>
+<a name="28"><span class="lineNumber">      28 </span>  final String? error;</a>
+<a name="29"><span class="lineNumber">      29 </span>  const ApprovalResult.ok(this.newStatus) : error = null;</a>
+<a name="30"><span class="lineNumber">      30 </span>  const ApprovalResult.fail(this.error) : newStatus = null;</a>
+<a name="31"><span class="lineNumber">      31 </span>}</a>
+<a name="32"><span class="lineNumber">      32 </span>class BookingLogic {</a>
+<a name="33"><span class="lineNumber">      33 </span>  </a>
+<a name="34"><span class="lineNumber">      34 </span>  // 1. Logika untuk mengecek bentrok waktu (Conflict Detection)</a>
+<a name="35"><span class="lineNumber">      35 </span>  static bool isTimeConflict(DateTime newStart, DateTime newEnd, DateTime existingStart, DateTime existingEnd) {</a>
+<a name="36"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      36 </span>    return newStart.isBefore(existingEnd) &amp;&amp; newEnd.isAfter(existingStart);</pre></button>
 <div class="content">
 <b>Detected mutations:</b>
 <table class="mutationTable" width="100%">
 <tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     return newStart.isBefore(existingEnd) <span class="changedTokens">||</span> newEnd.isAfter(existingStart);</span></td><td class="match">&&<span class="tooltip">Id: builtin.and</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+     return newStart.isBefore(existingEnd) <span class="changedTokens">&amp;&amp;!( newEnd.isAfter(existingStart))</span>;</span></td><td class="match">RegExp: pattern=([|&][|&])([^|&]*?)\) flags=m<span class="tooltip">Id: builtin.if.end</span></td></tr></table>
 
-</div></a><a name="6"><span class="lineNumber">       6 </span>  }</a>
-<a name="7"><span class="lineNumber">       7 </span></a>
-<a name="8"><span class="lineNumber">       8 </span>  // 2. Logika untuk menentukan status awal berdasarkan role dan jabatan</a>
-<a name="9"><span class="lineNumber">       9 </span>  static String determineInitialStatus(String role, String jabatan) {</a>
-<a name="10"><span class="lineNumber">      10 </span>    final jab = jabatan.toLowerCase();</a>
-<a name="11"><span class="lineNumber">      11 </span>    </a>
-<a name="12"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      12 </span>    if (role == 'admin' || role == 'manager_umum') {</pre></button>
+</div></a><a name="37"><span class="lineNumber">      37 </span>  }</a>
+<a name="38"><span class="lineNumber">      38 </span></a>
+<a name="39"><span class="lineNumber">      39 </span>  // 2. Logika untuk menentukan status awal berdasarkan role dan jabatan</a>
+<a name="40"><span class="lineNumber">      40 </span>  static String determineInitialStatus(String role, String jabatan) {</a>
+<a name="41"><span class="lineNumber">      41 </span>    final jab = jabatan.toLowerCase();</a>
+<a name="42"><span class="lineNumber">      42 </span>    </a>
+<a name="43"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      43 </span>    if (role == 'admin' || role == 'manager_umum') {</pre></button>
 <div class="content">
 <b>Detected mutations:</b>
 <table class="mutationTable" width="100%">
-<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if (role == 'admin' <span class="changedTokens">&amp;&amp;</span> role == 'manager_umum') {</span></td><td class="match">||<span class="tooltip">Id: builtin.or</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if (role <span class="changedTokens">!=</span> 'admin' || role == 'manager_umum') {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">3 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if (role == 'admin' || role <span class="changedTokens">!=</span> 'manager_umum') {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">4 :</td><td class="mutationText" width="87%"><span class="addedLine">+    <span class="changedTokens"> if (!(role == 'admin' || role == 'manager_umum')) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">5 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if <span class="changedTokens">(!(role == 'admin' )|| role == 'manager_umum')</span> {</span></td><td class="match">RegExp: pattern=\(([^|(]*?)\|\|([^()|]*?)\) flags=m<span class="tooltip">Id: builtin.logical.or_chain2</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">6 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if <span class="changedTokens">(role == 'admin' ||!( role == 'manager_umum'))</span> {</span></td><td class="match">RegExp: pattern=\(([^|(]*?)\|\|([^()|]*?)\) flags=m<span class="tooltip">Id: builtin.logical.or_chain2</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">7 :</td><td class="mutationText" width="87%"><span class="addedLine">+     <span class="changedTokens">if (!(role == 'admin' )||</span> role == 'manager_umum') {</span></td><td class="match">RegExp: pattern=if\s*\(([^|&\)]*?)([|&][|&]) flags=m<span class="tooltip">Id: builtin.if.start</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">8 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if (role == 'admin' <span class="changedTokens">||!( role == 'manager_umum'))</span> {</span></td><td class="match">RegExp: pattern=([|&][|&])([^|&]*?)\) flags=m<span class="tooltip">Id: builtin.if.end</span></td></tr></table>
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if <span class="changedTokens">(!(role == 'admin' )|| role == 'manager_umum')</span> {</span></td><td class="match">RegExp: pattern=\(([^|(]*?)\|\|([^()|]*?)\) flags=m<span class="tooltip">Id: builtin.logical.or_chain2</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if (role == 'admin' <span class="changedTokens">&amp;&amp;</span> role == 'manager_umum') {</span></td><td class="match">||<span class="tooltip">Id: builtin.or</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">3 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if (role <span class="changedTokens">!=</span> 'admin' || role == 'manager_umum') {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">4 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if (role == 'admin' || role <span class="changedTokens">!=</span> 'manager_umum') {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">5 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if <span class="changedTokens">(role == 'admin' ||!( role == 'manager_umum'))</span> {</span></td><td class="match">RegExp: pattern=\(([^|(]*?)\|\|([^()|]*?)\) flags=m<span class="tooltip">Id: builtin.logical.or_chain2</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">6 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if (role == 'admin' <span class="changedTokens">||!( role == 'manager_umum'))</span> {</span></td><td class="match">RegExp: pattern=([|&][|&])([^|&]*?)\) flags=m<span class="tooltip">Id: builtin.if.end</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">7 :</td><td class="mutationText" width="87%"><span class="addedLine">+    <span class="changedTokens"> if (!(role == 'admin' || role == 'manager_umum')) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">8 :</td><td class="mutationText" width="87%"><span class="addedLine">+     <span class="changedTokens">if (!(role == 'admin' )||</span> role == 'manager_umum') {</span></td><td class="match">RegExp: pattern=if\s*\(([^|&\)]*?)([|&][|&]) flags=m<span class="tooltip">Id: builtin.if.start</span></td></tr></table>
 
-</div></a><a name="13"><span class="lineNumber">      13 </span>      return 'APPROVAL_3';</a>
-<a name="14"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      14 </span>    } else if (role == 'operator') {</pre></button>
+</div></a><a name="44"><span class="lineNumber">      44 </span>      return 'APPROVAL_3';</a>
+<a name="45"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      45 </span>    } else if (role == 'operator') {</pre></button>
 <div class="content">
 <b>Detected mutations:</b>
 <table class="mutationTable" width="100%">
 <tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else if (role <span class="changedTokens">!=</span> 'operator') {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else<span class="changedTokens"> if (!(role == 'operator')) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr></table>
 
-</div></a><a name="15"><span class="lineNumber">      15 </span>      return 'APPROVAL_2';</a>
-<a name="16"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      16 </span>    } else if (role == 'user' &amp;&amp; jab.contains('manager')) {</pre></button>
+</div></a><a name="46"><span class="lineNumber">      46 </span>      return 'APPROVAL_2';</a>
+<a name="47"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      47 </span>    } else if (role == 'user' &amp;&amp; jab.contains('manager')) {</pre></button>
 <div class="content">
 <b>Detected mutations:</b>
 <table class="mutationTable" width="100%">
-<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else if (role == 'user' <span class="changedTokens">||</span> jab.contains('manager')) {</span></td><td class="match">&&<span class="tooltip">Id: builtin.and</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else if (role <span class="changedTokens">!=</span> 'user' &amp;&amp; jab.contains('manager')) {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">3 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else<span class="changedTokens"> if (!(role == 'user' &amp;&amp; jab.contains('manager'))) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">4 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else <span class="changedTokens">if (!(role == 'user' )&amp;&amp;</span> jab.contains('manager')) {</span></td><td class="match">RegExp: pattern=if\s*\(([^|&\)]*?)([|&][|&]) flags=m<span class="tooltip">Id: builtin.if.start</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">5 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else if (role == 'user' <span class="changedTokens">&amp;&amp;!( jab.contains('manager'))</span>) {</span></td><td class="match">RegExp: pattern=([|&][|&])([^|&]*?)\) flags=m<span class="tooltip">Id: builtin.if.end</span></td></tr></table>
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else if (role == 'user' <span class="changedTokens">||</span> jab.contains('manager')) {</span></td><td class="match">&&<span class="tooltip">Id: builtin.and</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else if (role <span class="changedTokens">!=</span> 'user' &amp;&amp; jab.contains('manager')) {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">3 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else if (role == 'user' <span class="changedTokens">&amp;&amp;!( jab.contains('manager'))</span>) {</span></td><td class="match">RegExp: pattern=([|&][|&])([^|&]*?)\) flags=m<span class="tooltip">Id: builtin.if.end</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">4 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else<span class="changedTokens"> if (!(role == 'user' &amp;&amp; jab.contains('manager'))) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">5 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else <span class="changedTokens">if (!(role == 'user' )&amp;&amp;</span> jab.contains('manager')) {</span></td><td class="match">RegExp: pattern=if\s*\(([^|&\)]*?)([|&][|&]) flags=m<span class="tooltip">Id: builtin.if.start</span></td></tr></table>
 
-</div></a><a name="17"><span class="lineNumber">      17 </span>      return 'APPROVAL_1';</a>
-<a name="18"><span class="lineNumber">      18 </span>    } else {</a>
-<a name="19"><span class="lineNumber">      19 </span>      return 'SUBMITTED';</a>
-<a name="20"><span class="lineNumber">      20 </span>    }</a>
-<a name="21"><span class="lineNumber">      21 </span>  }</a>
-<a name="22"><span class="lineNumber">      22 </span></a>
-<a name="23"><span class="lineNumber">      23 </span>  // 3. Logika untuk menghitung persentase kelengkapan kendaraan</a>
-<a name="24"><span class="lineNumber">      24 </span>  static double calculateCompleteness(List&lt;bool&gt; items) {</a>
-<a name="25"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      25 </span>    if (items.isEmpty) return 0.0;</pre></button>
+</div></a><a name="48"><span class="lineNumber">      48 </span>      return 'APPROVAL_1';</a>
+<a name="49"><span class="lineNumber">      49 </span>    } else {</a>
+<a name="50"><span class="lineNumber">      50 </span>      return 'SUBMITTED';</a>
+<a name="51"><span class="lineNumber">      51 </span>    }</a>
+<a name="52"><span class="lineNumber">      52 </span>  }</a>
+<a name="53"><span class="lineNumber">      53 </span></a>
+<a name="54"><span class="lineNumber">      54 </span>  // 3. Logika untuk menghitung persentase kelengkapan kendaraan</a>
+<a name="55"><span class="lineNumber">      55 </span>  static double calculateCompleteness(List&lt;bool&gt; items) {</a>
+<a name="56"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      56 </span>    if (items.isEmpty) return 0.0;</pre></button>
 <div class="content">
 <b>Detected mutations:</b>
 <table class="mutationTable" width="100%">
@@ -445,76 +481,300 @@ td.barBg
   // ==========================================
   static String? validateBookingTime(DateTime waktuPinjam, DateTime waktuKembali, DateTime now)) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr></table>
 
-</div></a><a name="26"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      26 </span>    final completed = items.where((item) =&gt; item == true).length;</pre></button>
+</div></a><a name="57"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      57 </span>    final completed = items.where((item) =&gt; item == true).length;</pre></button>
 <div class="content">
 <b>Detected mutations:</b>
 <table class="mutationTable" width="100%">
 <tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     final completed = items.where((item) =&gt; item <span class="changedTokens">!=</span> true).length;</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr></table>
 
-</div></a><a name="27"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      27 </span>    return completed / items.length;</pre></button>
+</div></a><a name="58"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      58 </span>    return completed / items.length;</pre></button>
 <div class="content">
 <b>Detected mutations:</b>
 <table class="mutationTable" width="100%">
 <tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     return completed <span class="changedTokens">* </span>items.length;</span></td><td class="match">RegExp: pattern=/([^=]) flags=m<span class="tooltip">Id: builtin.arith.div</span></td></tr></table>
 
-</div></a><a name="28"><span class="lineNumber">      28 </span>  }</a>
-<a name="29"><span class="lineNumber">      29 </span></a>
-<a name="30"><span class="lineNumber">      30 </span>  // ==========================================</a>
-<a name="31"><span class="lineNumber">      31 </span>  // TAMBAHAN UNTUK MR 2: Validasi Waktu</a>
-<a name="32"><span class="lineNumber">      32 </span>  // ==========================================</a>
-<a name="33"><span class="lineNumber">      33 </span>  static String? validateBookingTime(DateTime waktuPinjam, DateTime waktuKembali, DateTime now) {</a>
-<a name="34"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      34 </span>    if (waktuKembali.isBefore(waktuPinjam)) {</pre></button>
+</div></a><a name="59"><span class="lineNumber">      59 </span>  }</a>
+<a name="60"><span class="lineNumber">      60 </span></a>
+<a name="61"><span class="lineNumber">      61 </span>  // ==========================================</a>
+<a name="62"><span class="lineNumber">      62 </span>  // TAMBAHAN UNTUK MR 2: Validasi Waktu</a>
+<a name="63"><span class="lineNumber">      63 </span>  // ==========================================</a>
+<a name="64"><span class="lineNumber">      64 </span>  static String? validateBookingTime(DateTime waktuPinjam, DateTime waktuKembali, DateTime now) {</a>
+<a name="65"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      65 </span>    if (waktuKembali.isBefore(waktuPinjam)) {</pre></button>
 <div class="content">
 <b>Detected mutations:</b>
 <table class="mutationTable" width="100%">
 <tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+    <span class="changedTokens"> if (!(waktuKembali.isBefore(waktuPinjam))) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr></table>
 
-</div></a><a name="35"><span class="lineNumber">      35 </span>      return 'Waktu kembali harus setelah waktu pinjam';</a>
-<a name="36"><span class="lineNumber">      36 </span>    }</a>
-<a name="37"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      37 </span>    if (waktuPinjam.isBefore(now)) {</pre></button>
+</div></a><a name="66"><span class="lineNumber">      66 </span>      return 'Waktu kembali harus setelah waktu pinjam';</a>
+<a name="67"><span class="lineNumber">      67 </span>    }</a>
+<a name="68"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      68 </span>    if (waktuPinjam.isBefore(now)) {</pre></button>
 <div class="content">
 <b>Detected mutations:</b>
 <table class="mutationTable" width="100%">
 <tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+    <span class="changedTokens"> if (!(waktuPinjam.isBefore(now))) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr></table>
 
-</div></a><a name="38"><span class="lineNumber">      38 </span>      return 'Waktu pinjam tidak boleh di masa lalu';</a>
-<a name="39"><span class="lineNumber">      39 </span>    }</a>
-<a name="40"><span class="lineNumber">      40 </span>    return null; // Null berarti lolos validasi</a>
-<a name="41"><span class="lineNumber">      41 </span>  }</a>
-<a name="42"><span class="lineNumber">      42 </span></a>
-<a name="43"><span class="lineNumber">      43 </span>  // ==========================================</a>
-<a name="44"><span class="lineNumber">      44 </span>  // TAMBAHAN UNTUK MR 4: Validasi Odometer</a>
-<a name="45"><span class="lineNumber">      45 </span>  // ==========================================</a>
-<a name="46"><span class="lineNumber">      46 </span>  static String? validateOdometer(int odometerAwal, int odometerAkhir) {</a>
-<a name="47"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      47 </span>    if (odometerAkhir &lt; odometerAwal) {</pre></button>
+</div></a><a name="69"><span class="lineNumber">      69 </span>      return 'Waktu pinjam tidak boleh di masa lalu';</a>
+<a name="70"><span class="lineNumber">      70 </span>    }</a>
+<a name="71"><span class="lineNumber">      71 </span>    return null; // Null berarti lolos validasi</a>
+<a name="72"><span class="lineNumber">      72 </span>  }</a>
+<a name="73"><span class="lineNumber">      73 </span></a>
+<a name="74"><span class="lineNumber">      74 </span>  // ==========================================</a>
+<a name="75"><span class="lineNumber">      75 </span>  // TAMBAHAN UNTUK MR 4: Validasi Odometer</a>
+<a name="76"><span class="lineNumber">      76 </span>  // ==========================================</a>
+<a name="77"><span class="lineNumber">      77 </span>  static String? validateOdometer(int odometerAwal, int odometerAkhir) {</a>
+<a name="78"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      78 </span>    if (odometerAkhir &lt; odometerAwal) {</pre></button>
 <div class="content">
 <b>Detected mutations:</b>
 <table class="mutationTable" width="100%">
 <tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+    <span class="changedTokens"> if (!(odometerAkhir &lt; odometerAwal)) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr></table>
 
-</div></a><a name="48"><span class="lineNumber">      48 </span>      return 'Odometer akhir tidak boleh kurang dari odometer awal';</a>
-<a name="49"><span class="lineNumber">      49 </span>    }</a>
-<a name="50"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      50 </span>    if (odometerAkhir == odometerAwal) {</pre></button>
+</div></a><a name="79"><span class="lineNumber">      79 </span>      return 'Odometer akhir tidak boleh kurang dari odometer awal';</a>
+<a name="80"><span class="lineNumber">      80 </span>    }</a>
+<a name="81"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      81 </span>    if (odometerAkhir == odometerAwal) {</pre></button>
 <div class="content">
 <b>Detected mutations:</b>
 <table class="mutationTable" width="100%">
-<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if (odometerAkhir <span class="changedTokens">!=</span> odometerAwal) {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+    <span class="changedTokens"> if (!(odometerAkhir == odometerAwal)) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr></table>
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+    <span class="changedTokens"> if (!(odometerAkhir == odometerAwal)) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if (odometerAkhir <span class="changedTokens">!=</span> odometerAwal) {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr></table>
 
-</div></a><a name="51"><span class="lineNumber">      51 </span>      return 'Odometer akhir tidak boleh sama dengan odometer awal. Minimal bertambah 1 km';</a>
-<a name="52"><span class="lineNumber">      52 </span>    }</a>
-<a name="53"><span class="lineNumber">      53 </span>    return null; // Null berarti lolos validasi</a>
-<a name="54"><span class="lineNumber">      54 </span>  }</a>
-<a name="55"><span class="lineNumber">      55 </span></a>
-<a name="56"><span class="lineNumber">      56 </span>  // Kalkulasi jarak tempuh</a>
-<a name="57"><span class="lineNumber">      57 </span>  static int calculateDistance(int odometerAwal, int odometerAkhir) {</a>
-<a name="58"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      58 </span>    return odometerAkhir - odometerAwal;</pre></button>
+</div></a><a name="82"><span class="lineNumber">      82 </span>      return 'Odometer akhir tidak boleh sama dengan odometer awal. Minimal bertambah 1 km';</a>
+<a name="83"><span class="lineNumber">      83 </span>    }</a>
+<a name="84"><span class="lineNumber">      84 </span>    return null;</a>
+<a name="85"><span class="lineNumber">      85 </span>  }</a>
+<a name="86"><span class="lineNumber">      86 </span></a>
+<a name="87"><span class="lineNumber">      87 </span>  // Kalkulasi jarak tempuh</a>
+<a name="88"><span class="lineNumber">      88 </span>  static int calculateDistance(int odometerAwal, int odometerAkhir) {</a>
+<a name="89"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      89 </span>    return odometerAkhir - odometerAwal;</pre></button>
 <div class="content">
 <b>Detected mutations:</b>
 <table class="mutationTable" width="100%">
 <tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     return odometerAkhir <span class="changedTokens">+ </span>odometerAwal;</span></td><td class="match">RegExp: pattern=-([^=]) flags=m<span class="tooltip">Id: builtin.arith.sub</span></td></tr></table>
 
-</div></a><a name="59"><span class="lineNumber">      59 </span>  }</a>
-<a name="60"><span class="lineNumber">      60 </span>}</a>
+</div></a><a name="90"><span class="lineNumber">      90 </span>  }</a>
+<a name="91"><span class="lineNumber">      91 </span></a>
+<a name="92"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">      92 </span>  static const List&lt;String&gt; blockingStatuses = ['APPROVAL_2', 'APPROVAL_3', 'ON_GOING'];</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+   static const List&lt;String&gt; blockingStatuses <span class="changedTokens">= []</span>;</span></td><td class="match">RegExp: pattern=([=:>]\s*)\[([^\],]+),([^\]]+)\] flags=m<span class="tooltip">Id: builtin.list.clear</span></td></tr></table>
+
+</div></a><a name="93"><span class="lineNumber">      93 </span></a>
+<a name="94"><span class="lineNumber">      94 </span>  static List&lt;String&gt; availableVehicleIds(</a>
+<a name="95"><span class="lineNumber">      95 </span>    List&lt;String&gt; vehicleIds,</a>
+<a name="96"><span class="lineNumber">      96 </span>    List&lt;BookingSlot&gt; bookings,</a>
+<a name="97"><span class="lineNumber">      97 </span>    DateTime start,</a>
+<a name="98"><span class="lineNumber">      98 </span>    DateTime end,</a>
+<a name="99"><span class="lineNumber">      99 </span>  ) {</a>
+<a name="100"><span class="lineNumber">     100 </span>    final blocked = &lt;String&gt;{};</a>
+<a name="101"><span class="lineNumber">     101 </span>    for (final b in bookings) {</a>
+<a name="102"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     102 </span>      if (!blockingStatuses.contains(b.status)) continue;</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+      <span class="changedTokens"> if (!(!blockingStatuses.contains(b.status)) continue;
+      if (isTimeConflict(start, end, b.start, b.end))) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr></table>
+
+</div></a><a name="103"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     103 </span>      if (isTimeConflict(start, end, b.start, b.end)) {</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+       if (isTimeConflict(start, end, b.start, b.end)) <span class="changedTokens">{
+        </span></span></td><td class="match">RegExp: pattern=([{]\s*)([^\(;=\s}]+\([^;]+\)\s*;) flags=m<span class="tooltip">Id: builtin.function.removeVoidCall1</span></td></tr></table>
+
+</div></a><a name="104"><span class="lineNumber">     104 </span>        blocked.add(b.vehicleId);</a>
+<a name="105"><span class="lineNumber">     105 </span>      }</a>
+<a name="106"><span class="lineNumber">     106 </span>    }</a>
+<a name="107"><span class="lineNumber">     107 </span>    return vehicleIds.where((id) =&gt; !blocked.contains(id)).toList();</a>
+<a name="108"><span class="lineNumber">     108 </span>  }</a>
+<a name="109"><span class="lineNumber">     109 </span></a>
+<a name="110"><span class="lineNumber">     110 </span>  static List&lt;VehicleClass&gt; classifyVehicles({</a>
+<a name="111"><span class="lineNumber">     111 </span>    required List&lt;String&gt; vehicleIds,</a>
+<a name="112"><span class="lineNumber">     112 </span>    required List&lt;BookingSlot&gt; bookings,</a>
+<a name="113"><span class="lineNumber">     113 </span>    required String currentBookingId,</a>
+<a name="114"><span class="lineNumber">     114 </span>    required String? currentVehicleId,</a>
+<a name="115"><span class="lineNumber">     115 </span>  }) {</a>
+<a name="116"><span class="lineNumber">     116 </span>    final hard = &lt;String&gt;{};</a>
+<a name="117"><span class="lineNumber">     117 </span>    final soft = &lt;String, String&gt;{}; // vehicleId -&gt; bookingId</a>
+<a name="118"><span class="lineNumber">     118 </span></a>
+<a name="119"><span class="lineNumber">     119 </span>    for (final b in bookings) {</a>
+<a name="120"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     120 </span>      if (b.id == currentBookingId) continue;</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+      <span class="changedTokens"> if (!(b.id == currentBookingId) continue;
+      if (b.status == 'ON_GOING')) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+       if (b.id <span class="changedTokens">!=</span> currentBookingId) continue;</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr></table>
+
+</div></a><a name="121"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     121 </span>      if (b.status == 'ON_GOING') {</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+       if (b.status <span class="changedTokens">!=</span> 'ON_GOING') {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+       if (b.status == 'ON_GOING') <span class="changedTokens">{
+        </span></span></td><td class="match">RegExp: pattern=([{]\s*)([^\(;=\s}]+\([^;]+\)\s*;) flags=m<span class="tooltip">Id: builtin.function.removeVoidCall1</span></td></tr></table>
+
+</div></a><a name="122"><span class="lineNumber">     122 </span>        hard.add(b.vehicleId);</a>
+<a name="123"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     123 </span>      } else if (['SUBMITTED', 'APPROVAL_1', 'APPROVAL_2', 'APPROVAL_3']</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+       } else<span class="changedTokens"> if (!(['SUBMITTED', 'APPROVAL_1', 'APPROVAL_2', 'APPROVAL_3']
+          .contains(b.status))) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr></table>
+
+</div></a><a name="124"><span class="lineNumber">     124 </span>          .contains(b.status)) {</a>
+<a name="125"><span class="lineNumber">     125 </span>        soft[b.vehicleId] = b.id; // sengaja sama seperti kode asli</a>
+<a name="126"><span class="lineNumber">     126 </span>      }</a>
+<a name="127"><span class="lineNumber">     127 </span>    }</a>
+<a name="128"><span class="lineNumber">     128 </span></a>
+<a name="129"><span class="lineNumber">     129 </span>    final result = vehicleIds.map((id) {</a>
+<a name="130"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     130 </span>      if (id == currentVehicleId) {</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+       if (id <span class="changedTokens">!=</span> currentVehicleId) {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+      <span class="changedTokens"> if (!(id == currentVehicleId)) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr></table>
+
+</div></a><a name="131"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     131 </span>        return VehicleClass(id, VehicleCategory.current, null);</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+         return<span class="changedTokens"> VehicleClass( VehicleCategory.current,id, null);</span></span></td><td class="match">RegExp: pattern=([\s][a-zA-Z]+?[^\(;\s{}]*?)\s*\(([^,:;{}(]+?),([^,:;{}(]+?),([^,:;{}(]+?)\)\s*; flags=m<span class="tooltip">Id: builtin.function.arg3</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+         return<span class="changedTokens"> VehicleClass(id, null, VehicleCategory.current);</span></span></td><td class="match">RegExp: pattern=([\s][a-zA-Z]+?[^\(;\s{}]*?)\s*\(([^,:;{}(]+?),([^,:;{}(]+?),([^,:;{}(]+?)\)\s*; flags=m<span class="tooltip">Id: builtin.function.arg3</span></td></tr></table>
+
+</div></a><a name="132"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     132 </span>      } else if (hard.contains(id)) {</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+       } else<span class="changedTokens"> if (!(hard.contains(id))) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr></table>
+
+</div></a><a name="133"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     133 </span>        return VehicleClass(id, VehicleCategory.hardUnavailable, null);</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+         return<span class="changedTokens"> VehicleClass( VehicleCategory.hardUnavailable,id, null);</span></span></td><td class="match">RegExp: pattern=([\s][a-zA-Z]+?[^\(;\s{}]*?)\s*\(([^,:;{}(]+?),([^,:;{}(]+?),([^,:;{}(]+?)\)\s*; flags=m<span class="tooltip">Id: builtin.function.arg3</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+         return<span class="changedTokens"> VehicleClass(id, null, VehicleCategory.hardUnavailable);</span></span></td><td class="match">RegExp: pattern=([\s][a-zA-Z]+?[^\(;\s{}]*?)\s*\(([^,:;{}(]+?),([^,:;{}(]+?),([^,:;{}(]+?)\)\s*; flags=m<span class="tooltip">Id: builtin.function.arg3</span></td></tr></table>
+
+</div></a><a name="134"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     134 </span>      } else if (soft.containsKey(id)) {</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+       } else<span class="changedTokens"> if (!(soft.containsKey(id))) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr></table>
+
+</div></a><a name="135"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     135 </span>        return VehicleClass(id, VehicleCategory.softBooked, soft[id]);</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+         return<span class="changedTokens"> VehicleClass( VehicleCategory.softBooked,id, soft[id]);</span></span></td><td class="match">RegExp: pattern=([\s][a-zA-Z]+?[^\(;\s{}]*?)\s*\(([^,:;{}(]+?),([^,:;{}(]+?),([^,:;{}(]+?)\)\s*; flags=m<span class="tooltip">Id: builtin.function.arg3</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+         return<span class="changedTokens"> VehicleClass(id, soft[id], VehicleCategory.softBooked);</span></span></td><td class="match">RegExp: pattern=([\s][a-zA-Z]+?[^\(;\s{}]*?)\s*\(([^,:;{}(]+?),([^,:;{}(]+?),([^,:;{}(]+?)\)\s*; flags=m<span class="tooltip">Id: builtin.function.arg3</span></td></tr></table>
+
+</div></a><a name="136"><span class="lineNumber">     136 </span>      }</a>
+<a name="137"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     137 </span>      return VehicleClass(id, VehicleCategory.free, null);</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+       return<span class="changedTokens"> VehicleClass( VehicleCategory.free,id, null);</span></span></td><td class="match">RegExp: pattern=([\s][a-zA-Z]+?[^\(;\s{}]*?)\s*\(([^,:;{}(]+?),([^,:;{}(]+?),([^,:;{}(]+?)\)\s*; flags=m<span class="tooltip">Id: builtin.function.arg3</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+       return<span class="changedTokens"> VehicleClass(id, null, VehicleCategory.free);</span></span></td><td class="match">RegExp: pattern=([\s][a-zA-Z]+?[^\(;\s{}]*?)\s*\(([^,:;{}(]+?),([^,:;{}(]+?),([^,:;{}(]+?)\)\s*; flags=m<span class="tooltip">Id: builtin.function.arg3</span></td></tr></table>
+
+</div></a><a name="138"><span class="lineNumber">     138 </span>    }).toList();</a>
+<a name="139"><span class="lineNumber">     139 </span></a>
+<a name="140"><span class="lineNumber">     140 </span>    int rank(VehicleCategory c) {</a>
+<a name="141"><span class="lineNumber">     141 </span>      switch (c) {</a>
+<a name="142"><span class="lineNumber">     142 </span>        case VehicleCategory.current: return 0;</a>
+<a name="143"><span class="lineNumber">     143 </span>        case VehicleCategory.free: return 1;</a>
+<a name="144"><span class="lineNumber">     144 </span>        case VehicleCategory.softBooked: return 2;</a>
+<a name="145"><span class="lineNumber">     145 </span>        case VehicleCategory.hardUnavailable: return 3;</a>
+<a name="146"><span class="lineNumber">     146 </span>      }</a>
+<a name="147"><button class="collapsible problem"><pre class="fileContents"><span class="lineNumber">     147 </span>    }</pre></button>
+<div class="content">
+<b>Undetected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     <span class="changedTokens">}
+
+    </span></span></td><td class="match">RegExp: pattern=([};]\s*)([^\(;=\s}]+\([^;]+\)\s*;) flags=m<span class="tooltip">Id: builtin.function.removeVoidCall2</span></td></tr></table>
+
+</div></a><a name="148"><span class="lineNumber">     148 </span></a>
+<a name="149"><span class="lineNumber">     149 </span>    result.sort((a, b) =&gt; rank(a.category).compareTo(rank(b.category)));</a>
+<a name="150"><span class="lineNumber">     150 </span>    return result;</a>
+<a name="151"><span class="lineNumber">     151 </span>  }</a>
+<a name="152"><span class="lineNumber">     152 </span>  static List&lt;BookingSlot&gt; swapVehicles(BookingSlot a, BookingSlot b) {</a>
+<a name="153"><span class="lineNumber">     153 </span>      return [</a>
+<a name="154"><span class="lineNumber">     154 </span>        BookingSlot(id: a.id, vehicleId: b.vehicleId, status: a.status, start: a.start, end: a.end),</a>
+<a name="155"><span class="lineNumber">     155 </span>        BookingSlot(id: b.id, vehicleId: a.vehicleId, status: b.status, start: b.start, end: b.end),</a>
+<a name="156"><span class="lineNumber">     156 </span>      ];</a>
+<a name="157"><span class="lineNumber">     157 </span>    }</a>
+<a name="158"><span class="lineNumber">     158 </span>    static ApprovalResult approveTransition({</a>
+<a name="159"><span class="lineNumber">     159 </span>    required String role,</a>
+<a name="160"><span class="lineNumber">     160 </span>    required String jabatan,</a>
+<a name="161"><span class="lineNumber">     161 </span>    required String currentStatus,</a>
+<a name="162"><span class="lineNumber">     162 </span>    String? operatorType,</a>
+<a name="163"><span class="lineNumber">     163 </span>    bool hasConflict = false,</a>
+<a name="164"><span class="lineNumber">     164 </span>  }) {</a>
+<a name="165"><span class="lineNumber">     165 </span>    final isManagerDivisi = jabatan.toLowerCase().contains('manager');</a>
+<a name="166"><span class="lineNumber">     166 </span></a>
+<a name="167"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     167 </span>    if (role == 'user' &amp;&amp; isManagerDivisi) {</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if <span class="changedTokens">(!(role == 'user' )&amp;&amp; isManagerDivisi)</span> {</span></td><td class="match">RegExp: pattern=\(([^$(]*?)&&([^$()]*?)\) flags=m<span class="tooltip">Id: builtin.logical.and_chain2</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if <span class="changedTokens">(role == 'user' &amp;&amp;!( isManagerDivisi))</span> {</span></td><td class="match">RegExp: pattern=\(([^$(]*?)&&([^$()]*?)\) flags=m<span class="tooltip">Id: builtin.logical.and_chain2</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">3 :</td><td class="mutationText" width="87%"><span class="addedLine">+     <span class="changedTokens">if (!(role == 'user' )&amp;&amp;</span> isManagerDivisi) {</span></td><td class="match">RegExp: pattern=if\s*\(([^|&\)]*?)([|&][|&]) flags=m<span class="tooltip">Id: builtin.if.start</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">4 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if (role == 'user' <span class="changedTokens">&amp;&amp;!( isManagerDivisi))</span> {</span></td><td class="match">RegExp: pattern=([|&][|&])([^|&]*?)\) flags=m<span class="tooltip">Id: builtin.if.end</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">5 :</td><td class="mutationText" width="87%"><span class="addedLine">+    <span class="changedTokens"> if (!(role == 'user' &amp;&amp; isManagerDivisi)) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">6 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if (role <span class="changedTokens">!=</span> 'user' &amp;&amp; isManagerDivisi) {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">7 :</td><td class="mutationText" width="87%"><span class="addedLine">+     if (role == 'user' <span class="changedTokens">||</span> isManagerDivisi) {</span></td><td class="match">&&<span class="tooltip">Id: builtin.and</span></td></tr></table>
+
+</div></a><a name="168"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     168 </span>      if (currentStatus != 'SUBMITTED') {</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+      <span class="changedTokens"> if (!(currentStatus != 'SUBMITTED')) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+       if (currentStatus <span class="changedTokens">==</span> 'SUBMITTED') {</span></td><td class="match">!=<span class="tooltip">Id: builtin.op.neq</span></td></tr></table>
+
+</div></a><a name="169"><span class="lineNumber">     169 </span>        return const ApprovalResult.fail('Hanya dapat menyetujui status SUBMITTED');</a>
+<a name="170"><span class="lineNumber">     170 </span>      }</a>
+<a name="171"><span class="lineNumber">     171 </span>      return const ApprovalResult.ok('APPROVAL_1');</a>
+<a name="172"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     172 </span>    } else if (role == 'operator') {</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else<span class="changedTokens"> if (!(role == 'operator')) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else if (role <span class="changedTokens">!=</span> 'operator') {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr></table>
+
+</div></a><a name="173"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     173 </span>      if (operatorType == 'ruang_meeting') {</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+      <span class="changedTokens"> if (!(operatorType == 'ruang_meeting')) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+       if (operatorType <span class="changedTokens">!=</span> 'ruang_meeting') {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr></table>
+
+</div></a><a name="174"><span class="lineNumber">     174 </span>        return const ApprovalResult.fail('Operator Ruang Meeting tidak bisa menyetujui');</a>
+<a name="175"><span class="lineNumber">     175 </span>      }</a>
+<a name="176"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     176 </span>      if (currentStatus != 'APPROVAL_1') {</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+       if (currentStatus <span class="changedTokens">==</span> 'APPROVAL_1') {</span></td><td class="match">!=<span class="tooltip">Id: builtin.op.neq</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+      <span class="changedTokens"> if (!(currentStatus != 'APPROVAL_1')) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr></table>
+
+</div></a><a name="177"><span class="lineNumber">     177 </span>        return const ApprovalResult.fail('Hanya dapat menyetujui status APPROVAL_1');</a>
+<a name="178"><span class="lineNumber">     178 </span>      }</a>
+<a name="179"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     179 </span>      if (hasConflict) {</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+      <span class="changedTokens"> if (!(hasConflict)) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr></table>
+
+</div></a><a name="180"><span class="lineNumber">     180 </span>        return const ApprovalResult.fail('Kendaraan bentrok');</a>
+<a name="181"><span class="lineNumber">     181 </span>      }</a>
+<a name="182"><span class="lineNumber">     182 </span>      return const ApprovalResult.ok('APPROVAL_2');</a>
+<a name="183"><button class="collapsible problem"><pre class="fileContents"><span class="lineNumber">     183 </span>    } else if (role == 'admin' || role == 'manager_umum') {</pre></button>
+<div class="content">
+<b>Undetected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else if (role == 'admin' || role <span class="changedTokens">!=</span> 'manager_umum') {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else if <span class="changedTokens">(role == 'admin' ||!( role == 'manager_umum'))</span> {</span></td><td class="match">RegExp: pattern=\(([^|(]*?)\|\|([^()|]*?)\) flags=m<span class="tooltip">Id: builtin.logical.or_chain2</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">3 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else if (role == 'admin' <span class="changedTokens">||!( role == 'manager_umum'))</span> {</span></td><td class="match">RegExp: pattern=([|&][|&])([^|&]*?)\) flags=m<span class="tooltip">Id: builtin.if.end</span></td></tr></table>
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else<span class="changedTokens"> if (!(role == 'admin' || role == 'manager_umum')) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else if <span class="changedTokens">(!(role == 'admin' )|| role == 'manager_umum')</span> {</span></td><td class="match">RegExp: pattern=\(([^|(]*?)\|\|([^()|]*?)\) flags=m<span class="tooltip">Id: builtin.logical.or_chain2</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">3 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else <span class="changedTokens">if (!(role == 'admin' )||</span> role == 'manager_umum') {</span></td><td class="match">RegExp: pattern=if\s*\(([^|&\)]*?)([|&][|&]) flags=m<span class="tooltip">Id: builtin.if.start</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">4 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else if (role <span class="changedTokens">!=</span> 'admin' || role == 'manager_umum') {</span></td><td class="match">==<span class="tooltip">Id: builtin.op.eq</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">5 :</td><td class="mutationText" width="87%"><span class="addedLine">+     } else if (role == 'admin' <span class="changedTokens">&amp;&amp;</span> role == 'manager_umum') {</span></td><td class="match">||<span class="tooltip">Id: builtin.or</span></td></tr></table>
+
+</div></a><a name="184"><button class="collapsible hit"><pre class="fileContents"><span class="lineNumber">     184 </span>      if (currentStatus != 'APPROVAL_2') {</pre></button>
+<div class="content">
+<b>Detected mutations:</b>
+<table class="mutationTable" width="100%">
+<tr><td class="mutationLabel" width="5%">1 :</td><td class="mutationText" width="87%"><span class="addedLine">+      <span class="changedTokens"> if (!(currentStatus != 'APPROVAL_2')) {</span></span></td><td class="match">RegExp: pattern=[\s]if[\s]*\((.*?)\)[\s]*{ flags=ms<span class="tooltip">Id: builtin.if</span></td></tr><tr><td colspan="3"><hr class="ruler"/></td></tr><tr><td class="mutationLabel" width="5%">2 :</td><td class="mutationText" width="87%"><span class="addedLine">+       if (currentStatus <span class="changedTokens">==</span> 'APPROVAL_2') {</span></td><td class="match">!=<span class="tooltip">Id: builtin.op.neq</span></td></tr></table>
+
+</div></a><a name="185"><span class="lineNumber">     185 </span>        return const ApprovalResult.fail('Hanya dapat menyetujui status APPROVAL_2');</a>
+<a name="186"><span class="lineNumber">     186 </span>      }</a>
+<a name="187"><span class="lineNumber">     187 </span>      return const ApprovalResult.ok('APPROVAL_3');</a>
+<a name="188"><span class="lineNumber">     188 </span>    }</a>
+<a name="189"><span class="lineNumber">     189 </span>    return const ApprovalResult.fail('Role tidak memiliki izin');</a>
+<a name="190"><span class="lineNumber">     190 </span>  }</a>
+<a name="191"><span class="lineNumber">     191 </span></a>
+<a name="192"><span class="lineNumber">     192 </span>  static bool isFormAvailable(DateTime waktuPinjam, DateTime now) {</a>
+<a name="193"><span class="lineNumber">     193 </span>    return now.isAfter(waktuPinjam.subtract(const Duration(hours: 1)));</a>
+<a name="194"><span class="lineNumber">     194 </span>  }</a>
+<a name="195"><span class="lineNumber">     195 </span>}</a>
 </pre>
 <script>
 var coll = document.getElementsByClassName("collapsible");

@@ -9,6 +9,7 @@ import 'dart:convert';
 import '../services/location_tracking_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/foundation.dart';
+import 'package:pintra/utils/booking_logic.dart';
 
 class DetailPeminjamanPage extends StatefulWidget {
   final Map<String, dynamic> data;
@@ -842,8 +843,6 @@ Future<void> _approveBooking() async {
     setState(() => _isLoading = true);
 
     String currentStatus = _bookingData?['status'] ?? 'SUBMITTED';
-    String newStatus;
-    String actionText;
 
     String? userJabatan;
     try {
@@ -856,114 +855,109 @@ Future<void> _approveBooking() async {
       print('Error fetching user jabatan: $e');
     }
 
-    final isManagerDivisi = (userJabatan ?? '').toLowerCase().contains('manager');
+    bool adaKonflik = false;
+    String? konflikDengan;
 
-    if (widget.role == 'user' && isManagerDivisi) {
-      if (currentStatus != 'SUBMITTED') {
-        throw Exception('Hanya dapat menyetujui peminjaman dengan status SUBMITTED');
-      }
-      newStatus = 'APPROVAL_1';
-      actionText = 'Disetujui Manager Divisi';
-
-    } else if (widget.role == 'operator') {
-      if (widget.operatorType == 'ruang_meeting') {
-        throw Exception('Operator Ruang Meeting tidak bisa menyetujui peminjaman kendaraan');
-      }
-      if (currentStatus != 'APPROVAL_1') {
-        throw Exception('Hanya dapat menyetujui peminjaman dengan status APPROVAL_1');
-      }
-
-      // ✅ Cek kendaraan sudah dipilih
-      if (_bookingData?['vehicleId'] == null || _bookingData?['vehicleId'] == '') {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Harap pilih kendaraan terlebih dahulu dengan menekan tombol "Edit Kendaraan"'),
-              backgroundColor: Colors.orange.shade600,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+    // ✅ Khusus role operator: cek dulu kendaraan & konflik waktu via Firestore
+    if (widget.role == 'operator') {
+      if (widget.operatorType != 'ruang_meeting') {
+        if (_bookingData?['vehicleId'] == null || _bookingData?['vehicleId'] == '') {
+          setState(() => _isLoading = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Harap pilih kendaraan terlebih dahulu dengan menekan tombol "Edit Kendaraan"'),
+                backgroundColor: Colors.orange.shade600,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return;
         }
-        setState(() => _isLoading = false);
-        return;
-      }
 
-      final vehicleId = _bookingData!['vehicleId'] as String;
+        final vehicleId = _bookingData!['vehicleId'] as String;
 
-      // ✅ Safe null check untuk waktu
-      final dynamic rawWaktuPinjam = _bookingData!['waktuPinjam'];
-      final dynamic rawWaktuKembali = _bookingData!['waktuKembali'];
+        final dynamic rawWaktuPinjam = _bookingData!['waktuPinjam'];
+        final dynamic rawWaktuKembali = _bookingData!['waktuKembali'];
 
-      if (rawWaktuPinjam == null || rawWaktuKembali == null) {
-        setState(() => _isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Data waktu peminjaman tidak valid, hubungi admin'),
-              backgroundColor: Colors.red.shade600,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+        if (rawWaktuPinjam == null || rawWaktuKembali == null) {
+          setState(() => _isLoading = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Data waktu peminjaman tidak valid, hubungi admin'),
+                backgroundColor: Colors.red.shade600,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return;
         }
-        return;
-      }
 
-      // ✅ Safe casting — handle Timestamp maupun DateTime
-      final DateTime waktuPinjam = rawWaktuPinjam is Timestamp
-          ? rawWaktuPinjam.toDate()
-          : rawWaktuPinjam as DateTime;
-      final DateTime waktuKembali = rawWaktuKembali is Timestamp
-          ? rawWaktuKembali.toDate()
-          : rawWaktuKembali as DateTime;
+        final DateTime waktuPinjam = rawWaktuPinjam is Timestamp
+            ? rawWaktuPinjam.toDate()
+            : rawWaktuPinjam as DateTime;
+        final DateTime waktuKembali = rawWaktuKembali is Timestamp
+            ? rawWaktuKembali.toDate()
+            : rawWaktuKembali as DateTime;
 
-      print('🔍 Cek konflik untuk vehicleId: $vehicleId');
-      print('🕐 Waktu pinjam: $waktuPinjam — Waktu kembali: $waktuKembali');
+        print('🔍 Cek konflik untuk vehicleId: $vehicleId');
+        print('🕐 Waktu pinjam: $waktuPinjam — Waktu kembali: $waktuKembali');
 
-      // ✅ Query booking lain yang pakai kendaraan sama dan sudah di-approve operator (APPROVAL_2 ke atas)
-      final conflictSnapshot = await FirebaseFirestore.instance
-          .collection('vehicle_bookings')
-          .where('vehicleId', isEqualTo: vehicleId)
-          .where('status', whereIn: ['APPROVAL_2', 'APPROVAL_3', 'ON_GOING'])
-          .get();
+        final conflictSnapshot = await FirebaseFirestore.instance
+            .collection('vehicle_bookings')
+            .where('vehicleId', isEqualTo: vehicleId)
+            .where('status', whereIn: ['APPROVAL_2', 'APPROVAL_3', 'ON_GOING'])
+            .get();
 
-      print('📋 Jumlah booking konflik potensial: ${conflictSnapshot.docs.length}');
+        print('📋 Jumlah booking konflik potensial: ${conflictSnapshot.docs.length}');
 
-      bool adaKonflik = false;
-      String? konflikDengan;
+        for (var doc in conflictSnapshot.docs) {
+          if (doc.id == widget.data['id']) continue;
 
-      for (var doc in conflictSnapshot.docs) {
-        // Skip booking ini sendiri
-        if (doc.id == widget.data['id']) continue;
+          final data = doc.data();
+          final dynamic otherRawStart = data['waktuPinjam'];
+          final dynamic otherRawEnd = data['waktuKembali'];
 
-        final data = doc.data();
-        final dynamic otherRawStart = data['waktuPinjam'];
-        final dynamic otherRawEnd = data['waktuKembali'];
+          if (otherRawStart == null || otherRawEnd == null) continue;
 
-        if (otherRawStart == null || otherRawEnd == null) continue;
+          final DateTime otherStart = otherRawStart is Timestamp
+              ? otherRawStart.toDate()
+              : otherRawStart as DateTime;
+          final DateTime otherEnd = otherRawEnd is Timestamp
+              ? otherRawEnd.toDate()
+              : otherRawEnd as DateTime;
 
-        final DateTime otherStart = otherRawStart is Timestamp
-            ? otherRawStart.toDate()
-            : otherRawStart as DateTime;
-        final DateTime otherEnd = otherRawEnd is Timestamp
-            ? otherRawEnd.toDate()
-            : otherRawEnd as DateTime;
+          print('   Cek dengan booking ${doc.id}: $otherStart — $otherEnd');
 
-        print('   Cek dengan booking ${doc.id}: $otherStart — $otherEnd');
+          final bool isBentrok = BookingLogic.isTimeConflict(
+              waktuPinjam, waktuKembali, otherStart, otherEnd);
 
-        // ✅ Overlap check: A bentrok B jika A.start < B.end && A.end > B.start
-        final bool isBentrok = waktuPinjam.isBefore(otherEnd) && waktuKembali.isAfter(otherStart);
+          print('   Bentrok? $isBentrok');
 
-        print('   Bentrok? $isBentrok');
-
-        if (isBentrok) {
-          adaKonflik = true;
-          konflikDengan = data['namaPeminjam'] ?? doc.id;
-          break;
+          if (isBentrok) {
+            adaKonflik = true;
+            konflikDengan = data['namaPeminjam'] ?? doc.id;
+            break;
+          }
         }
       }
+    }
 
-      if (adaKonflik) {
-        setState(() => _isLoading = false);
+    // ✅ Keputusan status/izin sepenuhnya dari BookingLogic (fungsi murni)
+    final result = BookingLogic.approveTransition(
+      role: widget.role,
+      jabatan: userJabatan ?? '',
+      currentStatus: currentStatus,
+      operatorType: widget.operatorType,
+      hasConflict: adaKonflik,
+    );
+
+    if (result.error != null) {
+      setState(() => _isLoading = false);
+
+      // Kasus khusus: kendaraan bentrok → tampilkan dialog informatif (bukan cuma snackbar)
+      if (result.error == 'Kendaraan bentrok') {
         if (mounted) {
           showDialog(
             context: context,
@@ -998,19 +992,17 @@ Future<void> _approveBooking() async {
         return;
       }
 
-      newStatus = 'APPROVAL_2';
-      actionText = 'Diverifikasi Operator';
-
-    } else if (widget.role == 'admin' || widget.role == 'manager_umum') {
-      if (currentStatus != 'APPROVAL_2') {
-        throw Exception('Hanya dapat menyetujui peminjaman dengan status APPROVAL_2');
-      }
-      newStatus = 'APPROVAL_3';
-      actionText = 'Disetujui Manager Umum';
-
-    } else {
-      throw Exception('Role tidak memiliki izin untuk approval');
+      // Error lain → lempar exception, ditangkap di catch bawah (snackbar merah)
+      throw Exception(result.error);
     }
+
+    final newStatus = result.newStatus!;
+    final actionText = switch (newStatus) {
+      'APPROVAL_1' => 'Disetujui Manager Divisi',
+      'APPROVAL_2' => 'Diverifikasi Operator',
+      'APPROVAL_3' => 'Disetujui Manager Umum',
+      _ => 'Disetujui',
+    };
 
     await FirebaseFirestore.instance
         .collection('vehicle_bookings')
@@ -1047,7 +1039,6 @@ Future<void> _approveBooking() async {
         bookingData: _bookingData!,
       );
       print(success ? '✅ Notifikasi WA berhasil dikirim ke Operator' : '❌ Gagal mengirim notifikasi WA ke Operator');
-
     } else if (newStatus == 'APPROVAL_2') {
       print('📨 Mengirim notifikasi WA ke Manager Umum...');
       final success = await ApprovalNotificationService.sendApprovalNotificationToManagerUmum(
@@ -1055,7 +1046,6 @@ Future<void> _approveBooking() async {
         bookingData: _bookingData!,
       );
       print(success ? '✅ Notifikasi WA berhasil dikirim ke Manager Umum' : '❌ Gagal mengirim notifikasi WA ke Manager Umum');
-
     } else if (newStatus == 'APPROVAL_3') {
       print('📨 Mengirim notifikasi WA ke peminjam...');
       final success = await ApprovalNotificationService.sendApprovedNotificationToPeminjam(

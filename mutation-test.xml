@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<mutations version="1.0">
-  <files>
-    <file>lib/utils/booking_logic.dart</file>
-  </files>
-  <commands>
-    <command>flutter test test/booking_logic_metamorphic_test.dart</command>
-  </commands>
-</mutations>
